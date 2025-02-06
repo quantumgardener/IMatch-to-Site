@@ -1,0 +1,24 @@
+{
+  "type": "app",
+  "id": "9A77BB8E-9BED-4755-9BD1-991D6AD818EF",
+  "version": "1.0",
+  "author": [
+    "David C. Buchan"
+  ],
+  "name": {
+    "": "IMatch to Site"
+  },
+  "description": {
+    "": "Automate photo page creation for quantumgardener.info."
+  },
+  "defaultDocument": "index.html",
+  "icon": {
+    "": "qg-image.webp"
+  },
+  "runAs": "",
+  "windowSizing": {
+    "sizing": "both",
+    "width": 600,
+    "height": 400
+  }
+}

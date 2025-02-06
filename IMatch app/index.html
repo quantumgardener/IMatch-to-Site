@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<!-- Based on code by Mario M. Westphal at https://www.photools.com/community/index.php/topic,6385.msg44203.html#msg44203 and in the IMatch distribution-->
+<html>
+    <head>
+        <meta charset="utf-8">
+
+        <!-- Force latest version of IE -->
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+
+        <title>IMatch to Socials</title>
+        
+        <script src="/system/jquery/dist/jquery.min.js"></script>
+        <link rel="stylesheet" href="/system/font-awesome/css/font-awesome.min.css" />
+        <link rel="stylesheet" href="/system/bootstrap/dist/css/bootstrap.min.css" />
+        <link rel="stylesheet" href="/system/bootstrap/dist/css/bootstrap-theme.min.css" />
+        <!--<link rel="stylesheet" href="/system/themes/slate/bootstrap.min.css" />-->
+        <link rel="stylesheet" href="/system/animate.css/animate.min.css" />
+        <script src="/system/imws/imwslib.js"></script>
+        <script src="/system/imatch/imatchlib.js"></script>
+
+    </head>
+
+    <body>
+        <div class="container-fluid">
+            <h2><i class="fa fa-info-circle"></i> IMatch to Site</h2>
+            <p class="lead">This app adds, updates or deletes images from my Obsidian vault for publishing at <a src="https://quantumgardener.info/photos">https://quantumgardener.info/photos</a>.</p>
+            <p>An external Python script is called to execute the changes. Script location: <code id="script_path"></code></p>
+            <br/>
+            <button id="btn-all" class="btn btn-default">Run</button>
+            <!-- In these pre's we display the server response and data as needed -->
+            <h3>Script Response <i id="animation" class="fa fa-circle-o-notch fa-spin fa-fw text-muted" style="display:none"></i></h3>
+            <pre id="result"></pre>
+        </div>
+
+        <script>
+            $(document).ready(function () {
+
+                // Pick the two DOM elements for  displaying results and data
+                var result = $('#result');
+
+                IMWS.get('v1/imatch/appvar',{
+                        name: "imatch_to_socials_python_script_path"
+                }).then(function(response) {
+                        if (response.value !== undefined) {
+                            script_path = response.value + "\\share_images.py";
+                            $('#script_path').text(script_path);
+                        }
+                },
+                function(error){
+                    $('#result').text('Error: Unable to get script_path application variable.');
+                })
+
+                $('#btn-all').click(function() {
+                    call_python(script_path, "")
+                });
+
+
+            }); // $(document).ready
+
+            function showAnimation(active) {
+                if (active) {
+                    // Add the disabled attribute to all elements with the btn class.
+                    // This disables all buttons while we wait for the server response.
+                    $('.btn').prop('disabled',true);
+                    // Start our little animation
+                    $('#animation').fadeIn(200);
+                }
+                else {
+                    $('.btn').prop('disabled',false);
+                    $('#animation').fadeOut(200);
+                }
+            }
+
+            function call_python(script_path, parameters) {
+                $('#result').text('');
+                    showAnimation(true);
+
+                    IMatch.processRun({
+                        'executable' : 'python.exe ' + script_path,
+                        'parameters' : parameters,
+                        'showwindow' : false,
+                        'timeout' : 300
+                    }).then(function(response) {
+                        showAnimation(false);
+                        if (response.result == 'ok') {                          
+                            if (response.exitCode == 0) {
+                                $('#result').text(response.output);
+                            } 
+                            else {
+                                $('#result').text(response.output + "Error: " + response.errorOutput); 
+                            }
+                        }
+                        else {
+                            $('#result').text(JSON.stringify(response,null,2));                            
+                        }
+                    },
+                    function(error){
+                        showAnimation(false);
+                        console.log("error")
+                        result.text(error.responseText);
+                    });
+            }
+        </script>
+
+    </body>
+</html>
