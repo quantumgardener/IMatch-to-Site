@@ -1,4 +1,3 @@
-# pip3 install Mastodon.py
 import datetime
 import html
 import logging
@@ -12,25 +11,26 @@ import sys
 from PIL import Image
 
 from imatch_image import IMatchImage
-from platform_base import PlatformController
+from platform_controller import PlatformController
+from album import Album
 import IMatchAPI as im
 import config
 
-MASTER_WIDTH = 800
-MASTER_FORMAT = "JPEG"
-MASTER_QUALITY = 85
-THUMBNAIL_WIDTH = 150
-THUMBNAIL_FORMAT = "WEBP"
-
 class QuantumImage(IMatchImage):
 
-    def __init__(self, id, platform) -> None:
-        super().__init__(id, platform)
+    _MASTER_WIDTH = 800
+    _MASTER_FORMAT = "JPEG"
+    _MASTER_QUALITY = 85
+    _THUMBNAIL_WIDTH = 150
+    _THUMBNAIL_FORMAT = "WEBP"
+
+    def _init_(self, id, platform) -> None:
+        super()._init_(id, platform)
         self.alt_text = None
 
-    def prepare_for_upload(self) -> None:
+    def _prepare_for_operations(self) -> None:
         """Build variables ready for uploading."""
-        super().prepare_for_upload()
+        super()._prepare_for_operations()
 
         # Remove spaces from keywords
         # self.keywords = [item.replace(" ","") for item in self.keywords]
@@ -48,7 +48,13 @@ class QuantumImage(IMatchImage):
 
         self.full_description = "\n".join(tmp_description)
 
-        return None
+        match = re.search(r'\[(\d+)\]', self.filename)
+        if not match:
+            raise ValueError(f'{self.name}: Unable to extract digits from filename')
+        self.media_id = match.group(1)
+        self.target_md = f'{self.media_id}.md'
+        self.target_master = f'{self.media_id}_{QuantumImage._MASTER_WIDTH}.{QuantumImage._MASTER_FORMAT.lower()}' 
+        self.target_thumbnail = f'{self.media_id}_{QuantumImage._THUMBNAIL_WIDTH}.{QuantumImage._THUMBNAIL_FORMAT.lower()}'
 
     @property
     def is_valid(self) -> bool:
@@ -68,26 +74,24 @@ class QuantumImage(IMatchImage):
 
 class QuantumController(PlatformController):
 
-    __MAX_SIZE = 25 * config.MB_SIZE
-    __PHOTOS_PATH = "photos"
-    __ALBUMS_PATH = "albums"
-    __PHOTO_TEMPLATE = "photo"
-    __MAP_TEMPLATE = "map"
-    __ALBUM_TEMPLATE = "album"
-    __CARD_TEMPLATE = "card"
+    _MAX_SIZE = 25 * config.MB_SIZE
+    _PHOTOS_PATH = "photos"
+    _ALBUMS_PATH = "albums"
+    _PHOTO_TEMPLATE = "photo"
+    _MAP_TEMPLATE = "map"
+    _ALBUM_TEMPLATE = "album"
+    _CARD_TEMPLATE = "card"
     
-    def __init__(self, platform) -> None:
-        super().__init__(platform)
-        self.preferred_format = im.IMatchAPI.FORMAT_WEBP
-        self.allowed_formats = [im.IMatchAPI.FORMAT_WEBP, im.IMatchAPI.FORMAT_JPEG]
-        self.templates= {
-            QuantumController.__PHOTO_TEMPLATE : None,
-            QuantumController.__MAP_TEMPLATE : None,
-            QuantumController.__ALBUM_TEMPLATE : None,
-            QuantumController.__CARD_TEMPLATE : None,
-        }
-        
-        self.albums = {}
+    def __init__(self, platform_name, preferred_format, allowed_formats):
+        super().__init__(platform_name, preferred_format, allowed_formats)
+
+        self.templates = {
+            QuantumController._PHOTO_TEMPLATE : None,
+            QuantumController._MAP_TEMPLATE : None,
+            QuantumController._ALBUM_TEMPLATE : None,
+            QuantumController._CARD_TEMPLATE : None,
+        }    
+        logging.debug(f'{self.name}: Instance initialised.')
 
     def classify_images(self):
         super().classify_images()
@@ -96,34 +100,25 @@ class QuantumController(PlatformController):
                 splits = category['path'].split("|")
                 match splits[0]:
                     case "Socials":
-                        if splits[1] == "flickr":
+                        if splits[1] == self.name:
                             # Need to grab any albums and groups
                             try:
                                 if splits[2] == "albums":
                                     # Code is in the description
-                                    if splits[3] not in self.albums:
-                                        self.albums[splits[3]] = {}
-                                        self.albums[splits[3]]['name'] = splits[3]
-                                        self.albums[splits[3]]['images'] = set()
-                                        self.albums[splits[3]]['id'] = (category['description'].split("\n"))[0].strip()
+                                    name = splits[3]
+                                    album = self.get_album(name)
+                                    if album is None:
+                                        id = (category['description'].split("\n"))[0].strip()
                                         try:
-                                            self.albums[splits[3]]['description'] = (category['description'].split("\n"))[1].strip()
+                                            description = (category['description'].split("\n"))[1].strip()
                                         except IndexError:
                                             logging.error(f"{self.name}: Text description missing for {category}")
                                             sys.exit(1)
-                                    self.albums[splits[3]]['images'].add(image)
+                                        album = Album(name, id, description)
+                                        self.add_album(album)
+                                    album.add(image)
                             except IndexError:
                                 pass #no groups or albums found
-
-    def prepare_file_information(self, image):
-        """Gather information in a consitent format for writing files and add to image"""
-        match = re.search(r'\[(\d+)\]', image.filename)
-        if not match:
-            raise ValueError(f'{self.name}: Unable to extract digits from filename')
-        image.media_id = match.group(1)
-        image.target_master = f'{image.media_id}_{MASTER_WIDTH}.{MASTER_FORMAT.lower()}' 
-        image.target_thumbnail = f'{image.media_id}_{THUMBNAIL_WIDTH}.{THUMBNAIL_FORMAT.lower()}'
-        image.target_md = os.path.join(self.api[QuantumController.__PHOTOS_PATH], f'{image.media_id}.md')
 
     def write_photo_markdown(self, image):
 
@@ -134,7 +129,7 @@ class QuantumController(PlatformController):
         }
 
         if not image.is_image_in_category(im.IMatchAPI.get_application_variable("quantum_hide_me")):
-            map = self.templates[QuantumController.__MAP_TEMPLATE].format(**map_values)
+            map = self.templates[QuantumController._MAP_TEMPLATE].format(**map_values)
             logging.debug("Map included")
         else:
             map = ""
@@ -142,16 +137,16 @@ class QuantumController(PlatformController):
         
 
         template_values = {
-            'aperture' : '{0:.3g}'.format(float(image.aperture)) if image.aperture != "" else "__unknown__",
+            'aperture' : '{0:.3g}'.format(float(image.aperture)) if image.aperture != "" else "_unknown_",
             'camera' : image.model,
             'date_taken' : image.date_time.strftime('%Y-%m-%dT%H:%M:%S'),
             'description' : html.unescape(f'{image.headline} {image.description.replace("\n", " ")}'),
-            'focal_length' : image.focal_length if image.focal_length != "" else "__unknown__",
+            'focal_length' : image.focal_length if image.focal_length != "" else "_unknown_",
             'image_path' : image.target_master,
-            'iso' : image.iso if image.iso != "" else "__unknown__",
-            'lens' : image.lens if image.lens != "" else "__unknown__",
+            'iso' : image.iso if image.iso != "" else "_unknown_",
+            'lens' : image.lens if image.lens != "" else "_unknown_",
             'location' : image.location,
-            'shutter_speed' : image.shutter_speed if image.shutter_speed != "" else "__unknown__",
+            'shutter_speed' : image.shutter_speed if image.shutter_speed != "" else "_unknown_",
             'title' : image.title,
             'thumbnail' : image.target_thumbnail,
             'map' : map,
@@ -161,14 +156,15 @@ class QuantumController(PlatformController):
             raise ValueError(f"Missing latitude and longitude in image {image.name}")
 
         # OK to overwrite this every time
-        md_content = self.templates[QuantumController.__PHOTO_TEMPLATE].format(**template_values)
+        md_content = self.templates[QuantumController._PHOTO_TEMPLATE].format(**template_values)
         ##md_content = html.unescape(md_content)
         ## Clean out lines with "unknown"
         lines = md_content.split("\n")
-        filtered_lines = [line for line in lines if "__unknown__" not in line]
+        filtered_lines = [line for line in lines if "_unknown_" not in line]
         filtered_markdown = "\n".join(filtered_lines)
 
-        with open(image.target_md, 'w') as file:
+ 
+        with open(os.path.join(self.api[QuantumController._PHOTOS_PATH], image.target_md), 'w') as file:
             file.write(filtered_markdown)
 
     def create_master(self, image):
@@ -176,9 +172,9 @@ class QuantumController(PlatformController):
         with Image.open(image.filename) as img:
             width, height = img.size
             aspect_ratio = height / width
-            new_height = int(MASTER_WIDTH * aspect_ratio)
-            img = img.resize((MASTER_WIDTH, new_height), Image.LANCZOS)
-            img.save(self.build_photo_path(image.target_master), format=MASTER_FORMAT, quality=MASTER_QUALITY)
+            new_height = int(QuantumImage._MASTER_WIDTH * aspect_ratio)
+            img = img.resize((QuantumImage._MASTER_WIDTH, new_height), Image.LANCZOS)
+            img.save(self.build_photo_path(image.target_master), format=QuantumImage._MASTER_FORMAT, quality=QuantumImage._MASTER_QUALITY)
 
         # Now add back XMP information
         exiftool = r"C:\Program Files\photools.com\imatch6\exiftool.exe"
@@ -215,7 +211,7 @@ class QuantumController(PlatformController):
             logging.error(f"An error occurred: {e}")
             sys.exit(1)
 
-        if os.path.getsize(self.build_photo_path(image.target_master)) > QuantumController.__MAX_SIZE:
+        if os.path.getsize(self.build_photo_path(image.target_master)) > QuantumController._MAX_SIZE:
             self.errors.append(f"file too large")
             raise ValueError("Image too large after conversion")
 
@@ -223,9 +219,9 @@ class QuantumController(PlatformController):
         with Image.open(image.filename) as img:
             width, height = img.size
             aspect_ratio = height / width
-            new_height = int(THUMBNAIL_WIDTH * aspect_ratio)
-            img = img.resize((THUMBNAIL_WIDTH, new_height), Image.LANCZOS)
-            img.save(self.build_photo_path(image.target_thumbnail), format=THUMBNAIL_FORMAT)
+            new_height = int(QuantumImage._THUMBNAIL_WIDTH * aspect_ratio)
+            img = img.resize((QuantumImage._THUMBNAIL_WIDTH, new_height), Image.LANCZOS)
+            img.save(self.build_photo_path(image.target_thumbnail), format=QuantumImage._THUMBNAIL_FORMAT)
 
     def connect(self):
         try:
@@ -234,15 +230,16 @@ class QuantumController(PlatformController):
             else:
                 quantum_path = im.IMatchAPI.get_application_variable("quantum_path")
                 self.api = {
-                    QuantumController.__PHOTOS_PATH : os.path.join(quantum_path, QuantumController.__PHOTOS_PATH),
-                    QuantumController.__ALBUMS_PATH : os.path.join(quantum_path, QuantumController.__ALBUMS_PATH)
+                    QuantumController._PHOTOS_PATH : os.path.join(quantum_path, QuantumController._PHOTOS_PATH),
+                    QuantumController._ALBUMS_PATH : os.path.join(quantum_path, QuantumController._ALBUMS_PATH)
                 }
 
-                if os.path.exists(self.api[QuantumController.__PHOTOS_PATH]) and os.path.isdir(self.api[QuantumController.__PHOTOS_PATH]):
+                logging.debug(f"checking for {self.api[QuantumController._PHOTOS_PATH]}.")
+                if os.path.exists(self.api[QuantumController._PHOTOS_PATH]) and os.path.isdir(self.api[QuantumController._PHOTOS_PATH]):
                     photo_template_filename = os.path.join(os.path.dirname(os.path.abspath(__file__)),'quantum-photo.md')
                     if os.path.exists(photo_template_filename):
                         with open(photo_template_filename, 'r') as file:
-                            self.templates[QuantumController.__PHOTO_TEMPLATE] = file.read()
+                            self.templates[QuantumController._PHOTO_TEMPLATE] = file.read()
                     else:
                         logging.error('Connection error: {photo_template_filename} not found.')
                         sys.exit(1)
@@ -250,22 +247,22 @@ class QuantumController(PlatformController):
                     map_template_filename = os.path.join(os.path.dirname(os.path.abspath(__file__)),'quantum-photo-map.md')
                     if os.path.exists(map_template_filename):
                         with open(map_template_filename, 'r') as file:
-                            self.templates[QuantumController.__MAP_TEMPLATE] = file.read()
+                            self.templates[QuantumController._MAP_TEMPLATE] = file.read()
                     else:
                         logging.error('Connection error: {map_template_filename} not found.')
                         sys.exit(1)
 
 
                 else:
-                    logging.error(f'Connection error: {self.api[QuantumController.__PHOTOS_PATH]} not found.')
+                    logging.error(f'Connection error: {self.api[QuantumController._PHOTOS_PATH]} not found.')
                     sys.exit(1)
 
-                if os.path.exists(self.api[QuantumController.__ALBUMS_PATH]) and os.path.isdir(self.api[QuantumController.__ALBUMS_PATH]):
+                if os.path.exists(self.api[QuantumController._ALBUMS_PATH]) and os.path.isdir(self.api[QuantumController._ALBUMS_PATH]):
 
                     album_template_filename = os.path.join(os.path.dirname(os.path.abspath(__file__)),'quantum-album.md')
                     if os.path.exists(album_template_filename):
                         with open(album_template_filename, 'r') as file:
-                            self.templates[QuantumController.__ALBUM_TEMPLATE] = file.read()
+                            self.templates[QuantumController._ALBUM_TEMPLATE] = file.read()
                     else:
                         logging.error(f'Connection error: {album_template_filename} not found.')
                         sys.exit(1)
@@ -273,13 +270,13 @@ class QuantumController(PlatformController):
                     album_card_template_filename = os.path.join(os.path.dirname(os.path.abspath(__file__)),'quantum-album-card.md')
                     if os.path.exists(album_card_template_filename):
                         with open(album_card_template_filename, 'r') as file:
-                            self.templates[QuantumController.__CARD_TEMPLATE] = file.read()
+                            self.templates[QuantumController._CARD_TEMPLATE] = file.read()
                     else:
                         logging.error(f'Connection error: {album_card_template_filename} not found.')
                         sys.exit(1)
 
                 else:
-                    logging.error(f'Connection error: {self.api[QuantumController.__ALBUMS_PATH]} not found.')
+                    logging.error(f'Connection error: {self.api[QuantumController._ALBUMS_PATH]} not found.')
                     sys.exit(1)
 
                 print(f'{self.name}: Connected to {quantum_path}.')
@@ -293,16 +290,15 @@ class QuantumController(PlatformController):
         super().finalise()       
 
     def build_album_path(self, path):
-        return os.path.join(self.api[QuantumController.__ALBUMS_PATH], path)
+        return os.path.join(self.api[QuantumController._ALBUMS_PATH], path)
     
     def build_photo_path(self, path):
-        return os.path.join(self.api[QuantumController.__PHOTOS_PATH], path)
+        return os.path.join(self.api[QuantumController._PHOTOS_PATH], path)
     
     def commit_add(self, image):
         """Make the api call to commit the image to the platform, and update IMatch with reference details"""
         try:
-            self.prepare_file_information(image)
-            
+           
             if not os.path.exists(self.build_photo_path(image.target_master)):
                 # Add only if not there. We use update flags to replace an existing file
                 self.create_master(image)
@@ -330,7 +326,6 @@ class QuantumController(PlatformController):
     def commit_delete(self, image):
         """Make the api call to delete the image from the platform. We assume the file is not linked anywhere else."""
         try:
-            self.prepare_file_information(image)
 
             if os.path.exists(self.build_photo_path(image.target_master)):
                 os.remove(self.build_photo_path(image.target_master))
@@ -346,7 +341,6 @@ class QuantumController(PlatformController):
     def commit_update(self, image):
         """Make the api call to update the image on the platform"""
         try:
-            self.prepare_file_information(image)
 
             if image.operation == IMatchImage.OP_UPDATE:
                 if os.path.exists(self.build_photo_path(image.target_master)):
@@ -378,33 +372,32 @@ class QuantumController(PlatformController):
     def generate_albums(self):
         self.connect()
 
-        for album in self.albums.values():
-            print(f"{self.name}: Creating album for {album['name']} [{len(album['images'])} images].")
+        for album in sorted(self.albums.values()):
+            print(f"{self.name}: Creating album for {album.name} [{len(album.images)} images].")
             cards = []
             dates = []
-            for image in album['images']:
-                self.prepare_file_information(image)
+            for image in album.images:
                 dates.append(image.date_time)
                 card_template_values = {
                     'page' : image.media_id,
                     'title' : image.title,
                     'thumbnail' : image.target_thumbnail,
                 }
-                card_content = self.templates[QuantumController.__CARD_TEMPLATE].format(**card_template_values)
+                card_content = self.templates[QuantumController._CARD_TEMPLATE].format(**card_template_values)
                 cards.append(card_content)
         
             album_template_values = {
                 'datetime' : max(dates).strftime('%Y-%m-%dT%H:%M:%S'),
-                'title' : album['name'],
+                'title' : album.name,
                 'cards' : "\n".join(cards),
-                'description' : album['description'],
-                'thumbnail' : random.choice(list(album['images'])).target_thumbnail
+                'description' : album.description,
+                'thumbnail' : random.choice(list(album.images)).target_thumbnail
             }
 
-            md_content = self.templates[QuantumController.__ALBUM_TEMPLATE].format(**album_template_values)
+            md_content = self.templates[QuantumController._ALBUM_TEMPLATE].format(**album_template_values)
             md_content = html.unescape(md_content)
 
-            album_filename = self.build_album_path(f"{album['id']}.md")
+            album_filename = self.build_album_path(f"{album.id}.md")
             logging.debug(f"{self.name}: Writing album to {album_filename}")
             with open(album_filename, 'w') as file:
                 file.write(md_content)

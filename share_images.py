@@ -16,7 +16,9 @@ class Factory():
     platforms = {
         'quantum' : {
             'image' : quantum.QuantumImage,
-            'controller' : quantum.QuantumController
+            'controller' : quantum.QuantumController,
+            'preferred_format' : im.IMatchAPI.FORMAT_WEBP,
+            'allowed_formats' : [im.IMatchAPI.FORMAT_WEBP, im.IMatchAPI.FORMAT_JPEG]
         },
     }
 
@@ -34,7 +36,11 @@ class Factory():
     @classmethod
     def build_controller(cls, platform):
         try:
-            return cls.platforms[platform]['controller'](platform)
+            return cls.platforms[platform]['controller'](
+                platform,
+                cls.platforms[platform]['preferred_format'],
+                cls.platforms[platform]['allowed_formats']
+            )
         except KeyError:
             logging.error(f"{cls.__name__}.build(platform): '{platform.name}' is an unrecognised platform. Valid options are {cls.platforms.keys()}.")
             sys.exit()
@@ -77,7 +83,8 @@ if __name__ == "__main__":
             controller.delete_images()
             controller.finalise()
             controller.summarise()
-        except TypeError: 
+        except TypeError as ex:
+            print(ex) 
             print(f"{controller.name}: 0 images gathered from IMatch.")
 
     # stats = {}

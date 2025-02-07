@@ -23,6 +23,15 @@ class IMatchImage():
         self.controller = controller 
         self.controller.register_image(self)
 
+        self._fetch_information_from_imatch()
+        self._set_operations()
+        if self.operation != IMatchImage.OP_INVALID:
+            self._prepare_for_operations()
+            logging.debug(f'{self.name}: Prepared for operations (opcode: {self.operation}).')
+        else:
+            logging.debug(f'{self.name}: No valid operations.')
+
+    def _fetch_information_from_imatch(self):
         # Get this image's information from IMatch. Process and save each
         # as an attribute for easier reference.
         image_params = {
@@ -82,35 +91,8 @@ class IMatchImage():
                             logging.debug(f'Setting size to {relation['size']}')
                             self.size = relation['size']
 
-        # Set the operation for this file.
-        self.operation = IMatchImage.OP_NONE
-        if self.is_valid:
-            if not self.is_on_platform:
-                self.operation = IMatchImage.OP_ADD
-            else:
-                # Check collections for overriding instructions
-                if (self.wants_update or self.wants_metadata) and self.wants_delete:
-                    # We have conflicting instructions. 
-                    self.errors.append(f"Conflicting instructions. Images is in both {IMatchImage.config.DELETE_CATEGORY} and {IMatchImage.config.UPDATE_CATEGORY} or {IMatchImage.config.UPDATE_METADATA_CATEGORY} categories.")
-                    self.operation = IMatchImage.OP_INVALID
-                else:
-                    if self.wants_update:
-                        self.operation = IMatchImage.OP_UPDATE
-                    if self.wants_metadata:
-                        self.operation = IMatchImage.OP_METADATA
-                    if self.wants_delete:
-                        self.operation = IMatchImage.OP_DELETE
-        else:
-            self.operation = IMatchImage.OP_INVALID
-
-    def __repr__(self) -> str:
-        return vars(self)
-
-    def __str__(self) -> str:
-        return f"{type(self).__name__}(id: {self.id}, filename: {self.filename}, size: {self.size})"
-       
-    def prepare_for_upload(self) -> None:
-        """Build variables ready for uploading."""
+    def _prepare_for_operations(self):
+        """Build variables ready for operations."""
         self.keywords = set()  # These are the keywords to output. self.hierachy_keywords is what comes in.
         try:
             for keyword in self.hierarchical_keywords:
@@ -148,6 +130,36 @@ class IMatchImage():
                                 if genre != 'astrophotography':
                                     self.add_keyword(genre+" photography")
                                     logging.debug(f'Added {genre} photography genre to keywords')
+
+    def _set_operations(self):
+        # Set the operation for this file.
+        self.operation = IMatchImage.OP_NONE
+        if self.is_valid:
+            if not self.is_on_platform:
+                self.operation = IMatchImage.OP_ADD
+            else:
+                # Check collections for overriding instructions
+                if (self.wants_update or self.wants_metadata) and self.wants_delete:
+                    # We have conflicting instructions. 
+                    self.errors.append(f"Conflicting instructions. Images is in both {IMatchImage.config.DELETE_CATEGORY} and {IMatchImage.config.UPDATE_CATEGORY} or {IMatchImage.config.UPDATE_METADATA_CATEGORY} categories.")
+                    self.operation = IMatchImage.OP_INVALID
+                else:
+                    if self.wants_update:
+                        self.operation = IMatchImage.OP_UPDATE
+                    if self.wants_metadata:
+                        self.operation = IMatchImage.OP_METADATA
+                    if self.wants_delete:
+                        self.operation = IMatchImage.OP_DELETE
+        else:
+            self.operation = IMatchImage.OP_INVALID
+
+    def __repr__(self) -> str:
+        return vars(self)
+
+    def __str__(self) -> str:
+        return f"{type(self).__name__}(id: {self.id}, filename: {self.filename}, size: {self.size})"
+       
+    
 
     def add_keyword(self, keyword, dash=False) -> str:
         if dash:

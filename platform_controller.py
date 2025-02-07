@@ -1,21 +1,30 @@
 import logging
+import sys
 
 import IMatchAPI as im
 from imatch_image import IMatchImage
 import config
-import sys
+from album import Album
+
 class PlatformController():
 
-    def __init__(self, platform) -> None:
+    def __init__(self, platform_name, preferred_format, allowed_formats) -> None:
+        self.name = platform_name
+        self.preferred_format = preferred_format
+        self.allowed_formats = allowed_formats
+
         self.images = set()
         self.images_to_add = set()
         self.images_to_delete = set()
         self.images_to_update = set()
         self.invalid_images = set()
+        self.albums = {}
         self.api = None  # Holds the platform api connection once active
-        self.name = platform
         self.testing = im.IMatchAPI.get_application_variable("imatch_to_socials_testing") == 1  # = 0 live, 1 = testing
 
+    def __repr__(self):
+        return f'{self.name} with {len(self.images)} and {len(self.albums)}.'
+    
     def connect(self):
         """Upload and add image to platform"""
         raise NotImplementedError("Subclasses must implement this for their specific platform.")
@@ -24,6 +33,16 @@ class PlatformController():
         """Register image to the list of controller's images, and connect to image"""
         image.controller = self
         self.images.add(image)
+
+    def add_album(self, album):
+        if not isinstance(album, Album):
+            raise TypeError(f"Attempt to add something other than an ablum to controller: {self.name}")
+        
+        try:
+            self.albums[album.name] = album
+        except KeyError:
+            # Already there
+            pass
       
     def add_images(self):
         """Upload and add image to platform"""
@@ -36,9 +55,7 @@ class PlatformController():
         progress_counter = 1
         progress_end = len(self.images_to_add)
         for image in self.images_to_add:
-            image.prepare_for_upload()
 
-            # Prepare the image for attaching to the status. In Mastodon, "posts/toots" are all status
             # Upload the media, then the status with the media attached. 
             if self.testing:
                 print(f'{self.name}: **TEST** Adding {image.filename} ({image.size/config.MB_SIZE:2.1f} MB) ({progress_counter}/{progress_end}) "{image.title}"')
@@ -64,6 +81,7 @@ class PlatformController():
                     self.invalid_images.add(image)
                 case other:
                     pass
+
 
     def commit_add(self, image):
         """Make the api call to commit the image to the platform, and update IMatch with reference details"""
@@ -110,6 +128,12 @@ class PlatformController():
             )
         im.IMatchAPI.delete_attributes(self.name,list(deleted_images))
 
+    def get_album(self, name):
+        try:
+            return self.albums[name]
+        except KeyError:
+            return None
+
     def process_errors(self):
         """List information about all images that are invalid and were not processed"""
         # Clear all images from the error categories before assigning those from this run.
@@ -148,7 +172,7 @@ class PlatformController():
         progress_counter = 1
         progress_end = len(self.images_to_update)
         for image in self.images_to_update:
-            image.prepare_for_upload()
+
             if image.operation == IMatchImage.OP_UPDATE:
                 action = "all"
             else:
