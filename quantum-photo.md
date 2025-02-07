@@ -2,7 +2,7 @@
 aliases:
   - {title}
 tags: 
-  - class/photo
+{property_keywords}
 datetime: {date_taken}
 updated: 
 title: {title}
@@ -13,7 +13,7 @@ cssclasses:
 ---
 {description}
 
-![[{image_path}|800]]
+![[{image_path}|800|alt text]]
 
 | <i class="nf nf-fa-camera"></i>                                  | [[{camera}]]                         |
 | ----------------------------------------------------------------- | ------------------------------------ |

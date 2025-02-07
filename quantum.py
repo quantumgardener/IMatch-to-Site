@@ -32,9 +32,9 @@ class QuantumImage(IMatchImage):
         """Build variables ready for uploading."""
         super()._prepare_for_operations()
 
-        # Remove spaces from keywords
-        # self.keywords = [item.replace(" ","") for item in self.keywords]
-        # self.keywords = [item.replace("-","") for item in self.keywords]
+        # Format keywords consistently
+        self.keywords = [item.replace(" ","-") for item in self.keywords]
+        self.keywords = [item.lower() for item in self.keywords]
 
         if self.circadatecreated != "":
             circa = "ca. "
@@ -122,47 +122,56 @@ class QuantumController(PlatformController):
 
     def write_photo_markdown(self, image):
 
-        map_values = {
-            'latitude' : image.latitude,
-            'longitude' : image.longitude,
-            'key' : im.IMatchAPI.get_application_variable("quantum_map_key")            
-        }
+        try:
 
-        if not image.is_image_in_category(im.IMatchAPI.get_application_variable("quantum_hide_me")):
-            map = self.templates[QuantumController._MAP_TEMPLATE].format(**map_values)
-            logging.debug("Map included")
-        else:
-            map = ""
-            logging.debug("Map skipped")
-        
+            map_values = {
+                'latitude' : image.latitude,
+                'longitude' : image.longitude,
+                'key' : im.IMatchAPI.get_application_variable("quantum_map_key")            
+            }
 
-        template_values = {
-            'aperture' : '{0:.3g}'.format(float(image.aperture)) if image.aperture != "" else "_unknown_",
-            'camera' : image.model,
-            'date_taken' : image.date_time.strftime('%Y-%m-%dT%H:%M:%S'),
-            'description' : html.unescape(f'{image.headline} {image.description.replace("\n", " ")}'),
-            'focal_length' : image.focal_length if image.focal_length != "" else "_unknown_",
-            'image_path' : image.target_master,
-            'iso' : image.iso if image.iso != "" else "_unknown_",
-            'lens' : image.lens if image.lens != "" else "_unknown_",
-            'location' : image.location,
-            'shutter_speed' : image.shutter_speed if image.shutter_speed != "" else "_unknown_",
-            'title' : image.title,
-            'thumbnail' : image.target_thumbnail,
-            'map' : map,
-        }
+            if not image.is_image_in_category(im.IMatchAPI.get_application_variable("quantum_hide_me")):
+                map = self.templates[QuantumController._MAP_TEMPLATE].format(**map_values)
+                logging.debug("Map included")
+            else:
+                map = ""
+                logging.debug("Map skipped")
 
-        if( image.latitude == "" or image.longitude == ""):
-            raise ValueError(f"Missing latitude and longitude in image {image.name}")
+            property_keywords = {"class/photo"}
+            for keyword in image.keywords:
+                property_keywords.add(f"keyword/{keyword}")      
 
-        # OK to overwrite this every time
-        md_content = self.templates[QuantumController._PHOTO_TEMPLATE].format(**template_values)
-        ##md_content = html.unescape(md_content)
-        ## Clean out lines with "unknown"
-        lines = md_content.split("\n")
-        filtered_lines = [line for line in lines if "_unknown_" not in line]
-        filtered_markdown = "\n".join(filtered_lines)
+            template_values = {
+                'aperture' : '{0:.3g}'.format(float(image.aperture)) if image.aperture != "" else "_unknown_",
+                'camera' : image.model,
+                'date_taken' : image.date_time.strftime('%Y-%m-%dT%H:%M:%S'),
+                'description' : html.unescape(f'{image.headline} {image.description.replace("\n", " ")}'),
+                'focal_length' : image.focal_length if image.focal_length != "" else "_unknown_",
+                'image_path' : image.target_master,
+                'iso' : image.iso if image.iso != "" else "_unknown_",
+                'lens' : image.lens if image.lens != "" else "_unknown_",
+                'location' : image.location,
+                'property_keywords' : "\n".join(f"  - {item}" for item in sorted(property_keywords)),
+                'shutter_speed' : image.shutter_speed if image.shutter_speed != "" else "_unknown_",
+                'title' : image.title,
+                'thumbnail' : image.target_thumbnail,
+                'map' : map,
+            }
 
+            if( image.latitude == "" or image.longitude == ""):
+                raise ValueError(f"Missing latitude and longitude in image {image.name}")
+
+            # OK to overwrite this every time
+            md_content = self.templates[QuantumController._PHOTO_TEMPLATE].format(**template_values)
+
+            ## Clean out lines with "unknown"
+            lines = md_content.split("\n")
+            filtered_lines = [line for line in lines if "_unknown_" not in line]
+            filtered_markdown = "\n".join(filtered_lines)
+
+        except KeyError as e:
+            print(f"No value for {e} in template")
+            sys.exit(1)
  
         with open(os.path.join(self.api[QuantumController._PHOTOS_PATH], image.target_md), 'w') as file:
             file.write(filtered_markdown)
@@ -341,7 +350,6 @@ class QuantumController(PlatformController):
     def commit_update(self, image):
         """Make the api call to update the image on the platform"""
         try:
-
             if image.operation == IMatchImage.OP_UPDATE:
                 if os.path.exists(self.build_photo_path(image.target_master)):
                     os.remove(self.build_photo_path(image.target_master))
@@ -351,8 +359,8 @@ class QuantumController(PlatformController):
                     os.remove(self.build_photo_path(image.target_thumbnail))
                 self.create_thumbnail(image)
 
-
             self.write_photo_markdown(image)
+
 
             # Update the image in IMatch by adding the attributes below.
             im.IMatchAPI().set_attributes(self.name, image.id, data = {
