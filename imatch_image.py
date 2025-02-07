@@ -127,9 +127,6 @@ class IMatchImage():
                             for genre in splits[2:]:
                                 self.keywords.add(genre)
                                 logging.debug(f'Added {genre} genre to keywords')
-                                if genre != 'astrophotography':
-                                    self.add_keyword(genre+" photography")
-                                    logging.debug(f'Added {genre} photography genre to keywords')
 
     def _set_operations(self):
         # Set the operation for this file.
