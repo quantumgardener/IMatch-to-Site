@@ -1,4 +1,7 @@
+import json
 import logging
+import os
+import sys
 
 from imatch_image import IMatchImage
 
@@ -42,3 +45,23 @@ class Album():
         
         self.images.add(image)
         
+    @classmethod 
+    def load(cls, controller):
+        data_file = os.path.join(os.path.dirname(os.path.abspath(__file__)),'data.json')
+
+        try:
+            with open(data_file, "r") as file:
+                data = json.load(file)
+
+            albums = {}
+            for album in data[controller]['albums']:
+                albums[album['name']] = Album(album['name'], album['id'], album['description'])
+
+        except FileNotFoundError:
+            logging.error(f"{controller}: Unable to create albums. JSON file not found: {data_file}")
+            sys.exit(1)
+        except KeyError:
+            logging.error(f"{controller}: Unable to create albums. Data missing from: {data_file}")
+            sys.exit(1)
+
+        return albums

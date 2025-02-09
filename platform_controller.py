@@ -1,4 +1,5 @@
 import logging
+import pprint
 import sys
 
 import IMatchAPI as im
@@ -22,6 +23,8 @@ class PlatformController():
         self.api = None  # Holds the platform api connection once active
         self.testing = im.IMatchAPI.get_application_variable("imatch_to_socials_testing") == 1  # = 0 live, 1 = testing
 
+        self.albums = Album.load(self.name)
+
     def __repr__(self):
         return f'{self.name} with {len(self.images)} and {len(self.albums)}.'
     
@@ -33,17 +36,7 @@ class PlatformController():
         """Register image to the list of controller's images, and connect to image"""
         image.controller = self
         self.images.add(image)
-
-    def add_album(self, album):
-        if not isinstance(album, Album):
-            raise TypeError(f"Attempt to add something other than an ablum to controller: {self.name}")
-        
-        try:
-            self.albums[album.name] = album
-        except KeyError:
-            # Already there
-            pass
-      
+     
     def add_images(self):
         """Upload and add image to platform"""
         if len(self.images_to_add) == 0:

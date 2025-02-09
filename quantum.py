@@ -106,17 +106,11 @@ class QuantumController(PlatformController):
                                 if splits[2] == "albums":
                                     # Code is in the description
                                     name = splits[3]
-                                    album = self.get_album(name)
-                                    if album is None:
-                                        id = (category['description'].split("\n"))[0].strip()
-                                        try:
-                                            description = (category['description'].split("\n"))[1].strip()
-                                        except IndexError:
-                                            logging.error(f"{self.name}: Text description missing for {category}")
-                                            sys.exit(1)
-                                        album = Album(name, id, description)
-                                        self.add_album(album)
-                                    album.add(image)
+                                    try:
+                                        self.albums[name].add(image)
+                                    except KeyError:
+                                        logging.error(f'{self.name}: Unknown album "{name}". Check data.json.')
+                                        sys.exit(1)
                             except IndexError:
                                 pass #no groups or albums found
 

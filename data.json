@@ -1,0 +1,101 @@
+{
+    "quantum" : {
+        "albums" : [
+            {
+                "name" : "A Scanner Darkly",
+                "id" : 72177720315028481,
+                "description" : "Images scanned from prints. Mostly from 35mm, but not all. Consequently quality is fairly low and colours are often off."
+            },
+            {
+                "name" : "Basic Moods of Life",
+                "id" : 72177720312394983,
+                "description" : "Fractal art representing 6 of the Basic Moods of Life."
+            },
+            {
+                "name" : "Beasties and Critters",
+                "id" : 72177720310711598,
+                "description" : "The animals we we share our planet with."
+            },
+            {
+                "name" : "Bendigo Cemetery Walks",
+                "id" : 72177720311490810,
+                "description" : "Time spent wandering the cemetery."
+            },
+            {
+                "name" : "Buildings of Bendigo",
+                "id" : 72177720310700057,
+                "description" : "Founded in the 1850's gold rush, Bendigo's buildings reflect its wealth and today's buildings show its future."
+            },
+            {
+                "name" : "Cityscapes",
+                "id" : 72177720321973455,
+                "description" : "Interesting buildings, skylines and other structures found in cities."
+            },
+            {
+                "name" : "Destination Denmark",
+                "id" : 72177720322681416,
+                "description" : "My favourites from my time in Denmark."
+            },
+            {
+                "name" : "European Wandering",
+                "id" : 72177720322703991,
+                "description" : "Favourites from our time in England and Europe."
+            },
+            {
+                "name" : "Fractal Art",
+                "id" : 72177720312380002,
+                "description" : "I wish I had more time to devote to this."
+            },
+            {
+                "name" : "Growth from the Ground",
+                "id" : 72177720310694810,
+                "description" : "Nature's growth and beauty."
+            },
+            {
+                "name" : "Kangaroo Island (2024)",
+                "id" : 72177720316598806,
+                "description" : "Images from our holiday to Kangaroo Island, South Australia."
+            },
+            {
+                "name" : "Melbourne CBD Walk",
+                "id" : 72177720311919883,
+                "description" : "I found myself in Melbourne for an errand with lots of time to kill. Each time I came to a corner, I'd turn whichever way felt right. No destination in mind."
+            },
+            {
+                "name" : "Moments in Life",
+                "id" : 72177720321972757,
+                "description" : "Those little things that remind us what it's like to be human."
+            },
+            {
+                "name" : "No. 7 Reservoir",
+                "id" : 72177720310862212,
+                "description" : "Bendigo does not lie in a river. And in the early days a plan was hatched to build eight reservoirs. No 1. leaked, No.7 was built and plans for the remaining six abandoned."
+            },
+            {
+                "name" : "Panoramas",
+                "id" : 72177720310700072,
+                "description" : "I do love me a wider perspective on life."
+            },
+            {
+                "name" : "People",
+                "id" : 72177720312275186,
+                "description" : "People doing people things."
+            },
+            {
+                "name" : "The Sky Above",
+                "id" : 72177720312275211,
+                "description" : "The sky at any time of the day or night."
+            },
+            {
+                "name" : "Toys & Games",
+                "id" : 72177720316352529,
+                "description" : "Spending time playing is always good for the soul."
+            },
+            {
+                "name" : "Warhammer Miniatures",
+                "id" : 72177720323016675,
+                "description" : "Photos of my Warhammer miniature collection. All hand-painted by me."
+            }
+        ]
+    }
+}
