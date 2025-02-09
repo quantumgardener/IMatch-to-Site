@@ -8,7 +8,7 @@ import quantum
 logging.basicConfig(
     stream = sys.stdout,
     level = logging.INFO,
-    format = '%(levelname)8s | %(message)s'
+    format = '[%(levelname)-7s] %(message)s'
     )
 
 class Factory():
