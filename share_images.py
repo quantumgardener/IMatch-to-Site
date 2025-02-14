@@ -71,14 +71,14 @@ if __name__ == "__main__":
 
     for controller in platform_controllers:
         print( "--------------------------------------------------------------------------------------")
-        print(f"{controller.name}: Gathering images from IMatch.", end='', flush=True)
+        images = im.IMatchAPI.get_categories(im.IMatchUtility.build_category([config.ROOT_CATEGORY,controller.name]))['directFiles']
         count = 0
+        max_images = len(images)
         try:
-            for image_id in im.IMatchAPI.get_categories(im.IMatchUtility.build_category([config.ROOT_CATEGORY,controller.name]))['directFiles']:
+            for image_id in images:
                 image = Factory.build_image(image_id, controller)
                 count += 1
-                if count % 10 == 0:
-                    print(f' ...{count}', end='', flush=True)
+                print(f"{controller.name}: Gathering images from IMatch [{(count / max_images) * 100:3.0f}%]", end='\r')
             print()
             print(f"{controller.name}: {controller.stats['total']} images gathered from IMatch to action.")
 
