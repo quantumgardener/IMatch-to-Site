@@ -29,7 +29,7 @@ class IMatchImage():
             self._prepare_for_operations()
             logging.debug(f'{self.name}: Prepared for operations (opcode: {self.operation}).')
         else:
-            logging.debug(f'{self.name}: No valid operations.')
+            logging.debug(f'NO_OP: {self.name}')
 
     def _fetch_information_from_imatch(self):
         # Get this image's information from IMatch. Process and save each
@@ -49,20 +49,32 @@ class IMatchImage():
             "varshutter_speed" : "{File.MD.shutterspeed|value:formatted}",
             "varlatitude" : "{File.MD.gpslatitude|value:rawfrm}",
             "varlongitude" : "{File.MD.gpslongitude|value:rawfrm}",
-            "varcircadatecreated" : "{File.MD.XMP::iptcExt\\CircaDateCreated\\CircaDateCreated\\0}"
-            }
+            "varcircadatecreated" : "{File.MD.XMP::iptcExt\\CircaDateCreated\\CircaDateCreated\\0}",
+            "varai_description" : "{File.MD.photools.com::IMatch\\200020\\AI.description\\0}",
+            "varcountry" : "{File.MD.Composite\\MWG-Country\\Country\\0}",
+            "varstate" : "{File.MD.Composite\\MWG-State\\State\\0}",
+            "varcity" : "{File.MD.Composite\\MWG-City\\City\\0}",
+        }
         
+
         logging.debug("Querying image parameters")
         image_info = im.IMatchAPI.get_file_metadata([self.id],image_params)[0]
 
         for attribute in image_info.keys():
             match attribute:
-                case "fileName":    # fileName is a special case. Ask for filename, get fileName in results
-                    setattr(self, "filename", image_info[attribute])
-                    logging.debug(f'Setting filename to {image_info[attribute]}')
                 case "dateTime":
                     setattr(self, "date_time", datetime.strptime(image_info[attribute],'%Y-%m-%dT%H:%M:%S'))
                     logging.debug(f'Setting date_time to {image_info[attribute]}')
+                case "fileName":    # fileName is a special case. Ask for filename, get fileName in results
+                    setattr(self, "filename", image_info[attribute])
+                    logging.debug(f'Setting filename to {image_info[attribute]}')
+                case "model":
+                    if image_info[attribute] == "Canon EOS 400D DIGITAL":
+                        setattr(self, attribute, "Canon EOS 400D")
+                        logging.debug(f'Setting model to Canon EOS 400D')
+                    else:
+                        setattr(self, attribute, image_info[attribute])
+                        logging.debug(f'Setting {attribute} to {image_info[attribute]}')
                 case other:      
                     setattr(self, attribute, image_info[attribute])
                     logging.debug(f'Setting {attribute} to {image_info[attribute]}')
@@ -93,7 +105,7 @@ class IMatchImage():
 
     def _prepare_for_operations(self):
         """Build variables ready for operations."""
-        self.keywords = set()  # These are the keywords to output. self.hierachy_keywords is what comes in.
+        self.flat_keywords = set()  # These are the keywords to output. self.hierachy_keywords is what comes in.
         try:
             for keyword in self.hierarchical_keywords:
                 for k in keyword.split("|"):
@@ -101,31 +113,24 @@ class IMatchImage():
         except AttributeError:
             logging.error("hierarchical keywords missing on image but image has been marked valid.")
 
+        locations = []
+        for l in ['country', 'state', 'city']:
+            if len(getattr(self, l)) > 0: 
+                locations.append(getattr(self, l))
+        self.location = ", ".join(locations)
+
         # Add certain categories as keywords
         logging.debug("Processing base categories")
         for categories in self.categories:
             splits = categories['path'].split("|")
             logging.debug(splits)
             match splits[0]:
-                case 'Event':
-                    if splits[1] in ['Festival','Celebration']:
-                        self.add_keyword(splits[2]) 
-                        logging.debug(f'Added {splits[2]} to event keywords')
-                case 'Location':
-                    try:
-                        for location in splits[1:4]:
-                            self.add_keyword(location) 
-                            logging.debug(f'Added {location} to location keywords')
-                    except IndexError:
-                        logging.debug(f'Index error on {splits} for location')
-                        pass
-                    setattr(self, 'location', ', '.join(splits[::-1][-4:-1]))
                 case 'Image Characteristics':
                     match splits[1]:
                         case "Genre":
                             # Genre is tagged with itself and with "photography appended"
                             for genre in splits[2:]:
-                                self.keywords.add(genre)
+                                self.flat_keywords.add(genre)
                                 logging.debug(f'Added {genre} genre to keywords')
 
     def _set_operations(self):
@@ -154,9 +159,7 @@ class IMatchImage():
         return vars(self)
 
     def __str__(self) -> str:
-        return f"{type(self).__name__}(id: {self.id}, filename: {self.filename}, size: {self.size})"
-       
-    
+        return f"{type(self).__name__} (id: {self.id}, filename: {self.filename}, size: {self.size})"
 
     def add_keyword(self, keyword, dash=False) -> str:
         if dash:
@@ -165,7 +168,7 @@ class IMatchImage():
             clean_keyword = clean_keyword.replace("&","-and-")
         else:
             clean_keyword = keyword
-        self.keywords.add(clean_keyword)
+        self.flat_keywords.add(clean_keyword)
         return clean_keyword
     
     def is_image_in_category(self, search_category) -> bool:
@@ -234,7 +237,7 @@ class IMatchImage():
     
     @property
     def is_valid(self) -> bool:
-        for attribute in ['title', 'description', 'hierarchical_keywords']:
+        for attribute in ['title', 'hierarchical_keywords', 'ai_description']:
             try:
                 value  = getattr(self, attribute)
                 if isinstance(value, list):

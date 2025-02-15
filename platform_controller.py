@@ -60,6 +60,7 @@ class PlatformController():
             progress_counter += 1
 
     def classify_images(self):
+        print( f'{self.name}: Classifying images.')
         for image in self.images:
             match image.operation:
                 case IMatchImage.OP_ADD:

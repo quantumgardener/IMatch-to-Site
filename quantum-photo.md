@@ -6,14 +6,13 @@ tags:
 datetime: {date_taken}
 updated: 
 title: {title}
-description: {description}
-thumbnail: {thumbnail}
+thumbnail: "{thumbnail}"
 cssclasses:
   - photo-page
 ---
 {description}
 
-![[{image_path}|800|alt text]]
+![[{image_path}|{ai_description}]]
 
 | <i class="nf nf-fa-camera"></i>                                  | [[{camera}]]                         |
 | ----------------------------------------------------------------- | ------------------------------------ |

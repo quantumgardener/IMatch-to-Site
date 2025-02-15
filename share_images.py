@@ -1,5 +1,6 @@
 import sys
 import logging
+import pprint
 
 import config
 import IMatchAPI as im
@@ -90,7 +91,9 @@ if __name__ == "__main__":
             controller.summarise()
         except TypeError as ex:
             print(ex) 
-            print(f"{controller.name}: 0 images gathered from IMatch.")
+            sys.exit(1)
+
+        print(f"{controller.name}: 0 images gathered from IMatch.")
 
     # stats = {}
     # for controller in platform_controllers:

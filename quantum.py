@@ -24,17 +24,18 @@ class QuantumImage(IMatchImage):
     _THUMBNAIL_WIDTH = 150
     _THUMBNAIL_FORMAT = "WEBP"
 
-    def _init_(self, id, platform) -> None:
-        super()._init_(id, platform)
-        self.alt_text = None
+    def __init__(self, id, platform) -> None:
+        super().__init__(id, platform)
 
     def _prepare_for_operations(self) -> None:
         """Build variables ready for uploading."""
         super()._prepare_for_operations()
 
         # Format keywords consistently
-        self.keywords = [item.replace(" ","-") for item in self.keywords]
-        self.keywords = [item.lower() for item in self.keywords]
+        self.flat_keywords = [item.replace("--","-") for item in self.flat_keywords]
+        self.flat_keywords = [item.replace(" ","-") for item in self.flat_keywords]
+        self.flat_keywords = [item.lower() for item in self.flat_keywords]
+        self.hierarchical_keywords = [item.replace("|","/") for item in self.hierarchical_keywords]
 
         if self.circadatecreated != "":
             circa = "ca. "
@@ -42,12 +43,15 @@ class QuantumImage(IMatchImage):
             circa = ""
         tmp_description = [f"{self.title} -- {self.headline} (Taken {circa}{self.date_time.strftime("%#d %B %Y")})"]
         tmp_description.append('')
-        if len(self.keywords) > 0:
-            tmp_description.append(" ".join(["#" + keyword for keyword in self.keywords]))  # Ensure keywords are hashtags
+        if len(self.flat_keywords) > 0:
+            tmp_description.append(" ".join(["#" + keyword for keyword in self.flat_keywords]))  # Ensure keywords are hashtags
             tmp_description.append('')
 
         self.full_description = "\n".join(tmp_description)
 
+        if not hasattr(self, "description"):
+            self.description = ""
+        
         match = re.search(r'\[(\d+)\]', self.filename)
         if not match:
             raise ValueError(f'{self.name}: Unable to extract digits from filename')
@@ -55,11 +59,16 @@ class QuantumImage(IMatchImage):
         self.target_md = f'{self.media_id}.md'
         self.target_master = f'{self.media_id}_{QuantumImage._MASTER_WIDTH}.{QuantumImage._MASTER_FORMAT.lower()}' 
         self.target_thumbnail = f'{self.media_id}_{QuantumImage._THUMBNAIL_WIDTH}.{QuantumImage._THUMBNAIL_FORMAT.lower()}'
+        self.target_wide = f'{self.media_id}_{QuantumImage._THUMBNAIL_WIDTH*2}.{QuantumImage._THUMBNAIL_FORMAT.lower()}'
+        logging.debug(f'media_id: {self.media_id}')
+        logging.debug(f'target_md: {self.target_md}')
+        logging.debug(f'target_master: {self.target_master}')
+        logging.debug(f'target_thumbnail: {self.target_thumbnail}')
 
     @property
     def is_valid(self) -> bool:
         result = super().is_valid
-        for attribute in ['make', 'model']:
+        for attribute in ['make', 'model', 'country', 'state']:
             try:
                 if getattr(self, attribute).strip() == '':
                     self.errors.append(f"missing {attribute}")
@@ -96,23 +105,24 @@ class QuantumController(PlatformController):
     def classify_images(self):
         super().classify_images()
         for image in self.images:
-            for category in image.categories:
-                splits = category['path'].split("|")
-                match splits[0]:
-                    case "Socials":
-                        if splits[1] == self.name:
-                            # Need to grab any albums and groups
-                            try:
-                                if splits[2] == "albums":
-                                    # Code is in the description
-                                    name = splits[3]
-                                    try:
-                                        self.albums[name].add(image)
-                                    except KeyError:
-                                        logging.error(f'{self.name}: Unknown album "{name}". Check data.json.')
-                                        sys.exit(1)
-                            except IndexError:
-                                pass #no groups or albums found
+            if image.operation != IMatchImage.OP_INVALID:
+                for category in image.categories:
+                    splits = category['path'].split("|")
+                    match splits[0]:
+                        case "Socials":
+                            if splits[1] == self.name:
+                                # Need to grab any albums and groups
+                                try:
+                                    if splits[2] == "albums":
+                                        # Code is in the description
+                                        name = splits[3]
+                                        try:
+                                            self.albums[name].add(image)
+                                        except KeyError:
+                                            logging.error(f'{self.name}: Unknown album "{name}". Check data.json.')
+                                            sys.exit(1)
+                                except IndexError:
+                                    pass #no groups or albums found
 
     def write_photo_markdown(self, image):
 
@@ -132,14 +142,17 @@ class QuantumController(PlatformController):
                 logging.debug("Map skipped")
 
             property_keywords = {"class/photo"}
-            for keyword in image.keywords:
-                property_keywords.add(f"keyword/{keyword}")      
+            for keyword in image.hierarchical_keywords:
+                property_keywords.add(f"keyword/{keyword.lower()}")
+            for location in image.location.split(", "):
+                property_keywords.add(f"keyword/{location.lower()}")
 
             template_values = {
+                'ai_description' : html.unescape(image.ai_description),
                 'aperture' : '{0:.3g}'.format(float(image.aperture)) if image.aperture != "" else "_unknown_",
                 'camera' : image.model,
                 'date_taken' : image.date_time.strftime('%Y-%m-%dT%H:%M:%S'),
-                'description' : html.unescape(f'{image.headline} {image.description.replace("\n", " ")}'),
+                'description' : html.unescape(f'{image.headline} {image.description.replace("\n", " ")}') if image.description != "" else "_unknown_",
                 'focal_length' : image.focal_length if image.focal_length != "" else "_unknown_",
                 'image_path' : image.target_master,
                 'iso' : image.iso if image.iso != "" else "_unknown_",
@@ -148,7 +161,7 @@ class QuantumController(PlatformController):
                 'property_keywords' : "\n".join(f"  - {item}" for item in sorted(property_keywords)),
                 'shutter_speed' : image.shutter_speed if image.shutter_speed != "" else "_unknown_",
                 'title' : image.title,
-                'thumbnail' : image.target_thumbnail,
+                'thumbnail' : f"[[{image.target_thumbnail}]]",
                 'map' : map,
             }
 
@@ -218,13 +231,22 @@ class QuantumController(PlatformController):
             self.errors.append(f"file too large")
             raise ValueError("Image too large after conversion")
 
-    def create_thumbnail(self, image):
+    def create_thumbnails(self, image):
+        """Create thumbnails at both thumbnail and double-size"""
         with Image.open(image.filename) as img:
             width, height = img.size
             aspect_ratio = height / width
             new_height = int(QuantumImage._THUMBNAIL_WIDTH * aspect_ratio)
             img = img.resize((QuantumImage._THUMBNAIL_WIDTH, new_height), Image.LANCZOS)
             img.save(self.build_photo_path(image.target_thumbnail), format=QuantumImage._THUMBNAIL_FORMAT)
+
+        with Image.open(image.filename) as img:
+            width, height = img.size
+            aspect_ratio = height / width
+            new_height = int(QuantumImage._THUMBNAIL_WIDTH*2 * aspect_ratio)
+            img = img.resize((QuantumImage._THUMBNAIL_WIDTH*2, new_height), Image.LANCZOS)
+            img.save(self.build_photo_path(image.target_wide), format=QuantumImage._THUMBNAIL_FORMAT)
+
 
     def connect(self):
         try:
@@ -307,7 +329,7 @@ class QuantumController(PlatformController):
                 self.create_master(image)
 
             if not os.path.exists(self.build_photo_path(image.target_thumbnail)):
-                self.create_thumbnail(image)
+                self.create_thumbnails(image)
 
             self.write_photo_markdown(image)
             
@@ -334,6 +356,8 @@ class QuantumController(PlatformController):
                 os.remove(self.build_photo_path(image.target_master))
             if os.path.exists(self.build_photo_path(image.target_thumbnail)):
                 os.remove(self.build_photo_path(image.target_thumbnail))
+            if os.path.exists(self.build_photo_path(image.target_wide)):
+                os.remove(self.build_photo_path(image.target_wide))
             if os.path.exists(self.build_photo_path(image.target_md)):
                 os.remove(self.build_photo_path(image.target_md))
 
@@ -351,7 +375,7 @@ class QuantumController(PlatformController):
 
                 if os.path.exists(self.build_photo_path(image.target_thumbnail)):
                     os.remove(self.build_photo_path(image.target_thumbnail))
-                self.create_thumbnail(image)
+                self.create_thumbnails(image)
 
             self.write_photo_markdown(image)
 
@@ -375,31 +399,34 @@ class QuantumController(PlatformController):
         self.connect()
 
         for album in sorted(self.albums.values()):
-            print(f"{self.name}: Creating album for {album.name} [{len(album.images)} images].")
-            cards = []
-            dates = []
-            for image in album.images:
-                dates.append(image.date_time)
-                card_template_values = {
-                    'page' : image.media_id,
-                    'title' : image.title,
-                    'thumbnail' : image.target_thumbnail,
+            if(len(album) > 0):
+                print(f"{self.name}: Creating album for {album.name} [{len(album)} images].")
+                cards = []
+                dates = []
+                for image in album.images:
+                    dates.append(image.date_time)
+                    card_template_values = {
+                        'page' : image.media_id,
+                        'title' : image.title,
+                        'thumbnail' : image.target_thumbnail,
+                    }
+                    card_content = self.templates[QuantumController._CARD_TEMPLATE].format(**card_template_values)
+                    cards.append(card_content)
+
+                album_template_values = {
+                    'datetime' : max(dates).strftime('%Y-%m-%dT%H:%M:%S'),
+                    'title' : album.name,
+                    'cards' : "\n".join(cards),
+                    'description' : album.description,
+                    'thumbnail' : random.choice(list(album.images)).target_thumbnail
                 }
-                card_content = self.templates[QuantumController._CARD_TEMPLATE].format(**card_template_values)
-                cards.append(card_content)
-        
-            album_template_values = {
-                'datetime' : max(dates).strftime('%Y-%m-%dT%H:%M:%S'),
-                'title' : album.name,
-                'cards' : "\n".join(cards),
-                'description' : album.description,
-                'thumbnail' : random.choice(list(album.images)).target_thumbnail
-            }
 
-            md_content = self.templates[QuantumController._ALBUM_TEMPLATE].format(**album_template_values)
-            md_content = html.unescape(md_content)
+                md_content = self.templates[QuantumController._ALBUM_TEMPLATE].format(**album_template_values)
+                md_content = html.unescape(md_content)
 
-            album_filename = self.build_album_path(f"{album.id}.md")
-            logging.debug(f"{self.name}: Writing album to {album_filename}")
-            with open(album_filename, 'w') as file:
-                file.write(md_content)
+                album_filename = self.build_album_path(f"{album.id}.md")
+                logging.debug(f"{self.name}: Writing album to {album_filename}")
+                with open(album_filename, 'w') as file:
+                    file.write(md_content)
+            else:
+                print(f"{self.name}: Skipping empty album {album.name}.")
