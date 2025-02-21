@@ -2,7 +2,7 @@ import datetime
 import html
 import logging
 import os
-import pprint
+from pprint import pprint
 import random
 import re
 import subprocess
@@ -32,10 +32,9 @@ class QuantumImage(IMatchImage):
         super()._prepare_for_operations()
 
         # Format keywords consistently
-        self.flat_keywords = [item.replace("--","-") for item in self.flat_keywords]
-        self.flat_keywords = [item.replace(" ","-") for item in self.flat_keywords]
-        self.flat_keywords = [item.lower() for item in self.flat_keywords]
         self.hierarchical_keywords = [item.replace("|","/") for item in self.hierarchical_keywords]
+        self.hierarchical_keywords = [item.replace("--", "-") for item in self.hierarchical_keywords]
+        self.hierarchical_keywords = [item.replace(" ","-") for item in self.hierarchical_keywords]
 
         if self.circadatecreated != "":
             circa = "ca. "
@@ -142,10 +141,15 @@ class QuantumController(PlatformController):
                 logging.debug("Map skipped")
 
             property_keywords = {"class/photo"}
-            for keyword in image.hierarchical_keywords:
-                property_keywords.add(f"keyword/{keyword.lower()}")
+            for keyword in sorted(image.hierarchical_keywords):
+                property_keywords.add(f"keyword/{keyword}")
+
             for location in image.location.split(", "):
                 property_keywords.add(f"keyword/{location.lower()}")
+
+            # for album in self.albums.values():
+            #     if image in album.images:
+            #         property_keywords.add(f"album/{album.id}")
 
             template_values = {
                 'ai_description' : html.unescape(image.ai_description),
