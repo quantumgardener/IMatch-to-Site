@@ -109,7 +109,7 @@ class IMatchImage():
         try:
             for keyword in self.hierarchical_keywords:
                 for k in keyword.split("|"):
-                    self.add_keyword(k) 
+                    self.add_flat_keyword(k) 
         except AttributeError:
             logging.error("hierarchical keywords missing on image but image has been marked valid.")
 
@@ -161,14 +161,20 @@ class IMatchImage():
     def __str__(self) -> str:
         return f"{type(self).__name__} (id: {self.id}, filename: {self.filename}, size: {self.size})"
 
-    def add_keyword(self, keyword, dash=False) -> str:
-        if dash:
-            clean_keyword = keyword.replace(" ","-")
-            clean_keyword = clean_keyword.replace("--", "-")
-            clean_keyword = clean_keyword.replace("&","-and-")
-        else:
-            clean_keyword = keyword
-        self.flat_keywords.add(clean_keyword)
+    def add_flat_keyword(self, keyword) -> str:
+        clean_keyword = keyword.replace("--", "-")
+        clean_keyword = clean_keyword.replace(" ","-")
+        clean_keyword = clean_keyword.replace("&","-and-")
+        if not clean_keyword in self.flat_keywords:
+            self.flat_keywords.add(clean_keyword.lower())
+        return clean_keyword
+    
+    def add_hierarchical_keyword(self, keyword) -> str:
+        clean_keyword = keyword.replace("--", "-")
+        clean_keyword = clean_keyword.replace(" ","-")
+        clean_keyword = clean_keyword.replace("&","-and-")
+        if not clean_keyword in self.hierarchical_keywords:
+            self.hierarchical_keywords.append(clean_keyword.lower())
         return clean_keyword
     
     def is_image_in_category(self, search_category) -> bool:
