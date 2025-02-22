@@ -16,13 +16,16 @@ from album import Album
 import IMatchAPI as im
 import config
 
-class QuantumImage(IMatchImage):
+SCALING_FACTORS = [
+    { "size" : 100, "suffix" : "_t", "format" : "WEBP" },
+    { "size" : 240, "suffix" : "_m", "format" : "WEBP" },
+    { "size" : 320, "suffix" : "_n", "format" : "WEBP" },
+    { "size" : 500, "suffix" : "", "format" : "WEBP" },
+    { "size" : 640, "suffix" : "_z", "format" : "WEBP" },
+    { "size" : 800, "suffix" : "_c", "format" : "JPEG" },
+]
 
-    _MASTER_WIDTH = 800
-    _MASTER_FORMAT = "JPEG"
-    _MASTER_QUALITY = 85
-    _THUMBNAIL_WIDTH = 150
-    _THUMBNAIL_FORMAT = "WEBP"
+class QuantumImage(IMatchImage):
 
     def __init__(self, id, platform) -> None:
         super().__init__(id, platform)
@@ -56,14 +59,9 @@ class QuantumImage(IMatchImage):
             raise ValueError(f'{self.name}: Unable to extract digits from filename')
         self.media_id = match.group(1)
         self.target_md = f'{self.media_id}.md'
-        self.target_master = f'{self.media_id}_{QuantumImage._MASTER_WIDTH}.{QuantumImage._MASTER_FORMAT.lower()}' 
-        self.target_thumbnail = f'{self.media_id}_{QuantumImage._THUMBNAIL_WIDTH}.{QuantumImage._THUMBNAIL_FORMAT.lower()}'
-        self.target_wide = f'{self.media_id}_{QuantumImage._THUMBNAIL_WIDTH*2}.{QuantumImage._THUMBNAIL_FORMAT.lower()}'
         logging.debug(f'media_id: {self.media_id}')
         logging.debug(f'target_md: {self.target_md}')
-        logging.debug(f'target_master: {self.target_master}')
-        logging.debug(f'target_thumbnail: {self.target_thumbnail}')
-
+        
     @property
     def is_valid(self) -> bool:
         result = super().is_valid
@@ -79,6 +77,14 @@ class QuantumImage(IMatchImage):
     def is_on_platform(self) -> bool:
         res = im.IMatchAPI.get_attributes("quantum", self.id)
         return len(res) != 0
+    
+    @property
+    def master(self) -> str:
+        return f'{self.media_id}_c.{QuantumController._MASTER_FORMAT.lower()}'
+
+    @property
+    def thumbnail(self) -> str:
+        return f'{self.media_id}_t.{QuantumController._THUMBNAIL_FORMAT.lower()}'
 
 class QuantumController(PlatformController):
 
@@ -89,6 +95,8 @@ class QuantumController(PlatformController):
     _MAP_TEMPLATE = "map"
     _ALBUM_TEMPLATE = "album"
     _CARD_TEMPLATE = "card"
+    _MASTER_FORMAT = "JPEG"
+    _THUMBNAIL_FORMAT = "WEBP"
     
     def __init__(self, platform_name, preferred_format, allowed_formats):
         super().__init__(platform_name, preferred_format, allowed_formats)
@@ -158,14 +166,14 @@ class QuantumController(PlatformController):
                 'date_taken' : image.date_time.strftime('%Y-%m-%dT%H:%M:%S'),
                 'description' : html.unescape(f'{image.headline} {image.description.replace("\n", " ")}') if image.description != "" else "_unknown_",
                 'focal_length' : image.focal_length if image.focal_length != "" else "_unknown_",
-                'image_path' : image.target_master,
+                'image_path' : image.master,
                 'iso' : image.iso if image.iso != "" else "_unknown_",
                 'lens' : image.lens if image.lens != "" else "_unknown_",
                 'location' : image.location,
                 'property_keywords' : "\n".join(f"  - {item}" for item in sorted(property_keywords)),
                 'shutter_speed' : image.shutter_speed if image.shutter_speed != "" else "_unknown_",
                 'title' : image.title,
-                'thumbnail' : f"[[{image.target_thumbnail}]]",
+                'thumbnail' : f"[[{image.thumbnail}]]",
                 'map' : map,
             }
 
@@ -187,70 +195,56 @@ class QuantumController(PlatformController):
         with open(os.path.join(self.api[QuantumController._PHOTOS_PATH], image.target_md), 'w') as file:
             file.write(filtered_markdown)
 
-    def create_master(self, image):
-        # Resize image
+    def create_image(self, image, output_file, long_edge, format, quality=85):
+        """Create image from original as specified"""
+
+        logging.debug(f"Creating image: {output_file}")
         with Image.open(image.filename) as img:
             width, height = img.size
-            aspect_ratio = height / width
-            new_height = int(QuantumImage._MASTER_WIDTH * aspect_ratio)
-            img = img.resize((QuantumImage._MASTER_WIDTH, new_height), Image.LANCZOS)
-            img.save(self.build_photo_path(image.target_master), format=QuantumImage._MASTER_FORMAT, quality=QuantumImage._MASTER_QUALITY)
+            scaling_factor = int(long_edge) / max(width, height)
+            new_size = (int(width * scaling_factor), int(height * scaling_factor))
+            img = img.resize(new_size, Image.LANCZOS)
+            img.save(output_file, format=format, quality=quality)
 
-        # Now add back XMP information
-        exiftool = r"C:\Program Files\photools.com\imatch6\exiftool.exe"
-        exiftool = os.path.normpath(exiftool)
-        command = [
-            exiftool,
-            '-TagsFromFile',
-            image.filename,
-            '-xmp:CreateDate',
-            '-xmp-photoshop:DateCreated',
-            '-xmp-dc:Title',
-            '-xmp-dc:Description',
-            '-xmp-xmpRights:All',
-            '-xmp-xmp:Rights',
-            '-xmp-dc:rights',
-            '-XMP-photoshop:Country',
-            '-XMP-photoshop:State',
-            '-XMP-photoshop:City',
-            '-overwrite_original',
-            self.build_photo_path(image.target_master)
-        ]
+        if format == "JPEG":
+            # Add back XMP information
+            exiftool = r"C:\Program Files\photools.com\imatch6\exiftool.exe"
+            exiftool = os.path.normpath(exiftool)
+            command = [
+                exiftool,
+                '-TagsFromFile',
+                image.filename,
+                '-xmp:CreateDate',
+                '-xmp-photoshop:DateCreated',
+                '-xmp-dc:Title',
+                '-xmp-dc:Description',
+                '-xmp-xmpRights:All',
+                '-xmp-xmp:Rights',
+                '-xmp-dc:rights',
+                '-XMP-photoshop:Country',
+                '-XMP-photoshop:State',
+                '-XMP-photoshop:City',
+                '-overwrite_original',
+                output_file
+            ]
 
-        try:
-            result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            if result.returncode != 0:
-                logging.error(f"Error copying metadata: {result.stderr}")
+            try:
+                result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                if result.returncode != 0:
+                    logging.error(f"Error copying metadata: {result.stderr}")
+                    sys.exit(1)
+                else:
+                    logging.debug("Metadata copied successfully.")
+            except FileNotFoundError:
+                logging.error(f"ExifTool not found at {exiftool}")
                 sys.exit(1)
-            else:
-                logging.debug("Metadata copied successfully.")
-        except FileNotFoundError:
-            logging.error(f"ExifTool not found at {exiftool}")
-            sys.exit(1)
-        except Exception as e:
-            logging.error(f"An error occurred: {e}")
-            sys.exit(1)
+            except Exception as e:
+                logging.error(f"An error occurred: {e}")
+                sys.exit(1)
 
-        if os.path.getsize(self.build_photo_path(image.target_master)) > QuantumController._MAX_SIZE:
+        if os.path.getsize(output_file) > QuantumController._MAX_SIZE:
             self.errors.append(f"file too large")
             raise ValueError("Image too large after conversion")
-
-    def create_thumbnails(self, image):
-        """Create thumbnails at both thumbnail and double-size"""
-        with Image.open(image.filename) as img:
-            width, height = img.size
-            aspect_ratio = height / width
-            new_height = int(QuantumImage._THUMBNAIL_WIDTH * aspect_ratio)
-            img = img.resize((QuantumImage._THUMBNAIL_WIDTH, new_height), Image.LANCZOS)
-            img.save(self.build_photo_path(image.target_thumbnail), format=QuantumImage._THUMBNAIL_FORMAT)
-
-        with Image.open(image.filename) as img:
-            width, height = img.size
-            aspect_ratio = height / width
-            new_height = int(QuantumImage._THUMBNAIL_WIDTH*2 * aspect_ratio)
-            img = img.resize((QuantumImage._THUMBNAIL_WIDTH*2, new_height), Image.LANCZOS)
-            img.save(self.build_photo_path(image.target_wide), format=QuantumImage._THUMBNAIL_FORMAT)
-
 
     def connect(self):
         try:
@@ -313,7 +307,6 @@ class QuantumController(PlatformController):
             print(f"An unknown exception occurred in connnecting: {e}")
             sys.exit(1)
 
-
     def finalise(self):
         self.generate_albums()
         super().finalise()       
@@ -328,12 +321,10 @@ class QuantumController(PlatformController):
         """Make the api call to commit the image to the platform, and update IMatch with reference details"""
         try:
            
-            if not os.path.exists(self.build_photo_path(image.target_master)):
-                # Add only if not there. We use update flags to replace an existing file
-                self.create_master(image)
-
-            if not os.path.exists(self.build_photo_path(image.target_thumbnail)):
-                self.create_thumbnails(image)
+            # Because we're adding, assume all existing images are to be overwritten
+            for scale in SCALING_FACTORS:
+                output_file = self.build_photo_path(f'{image.media_id}{scale['suffix']}.{scale['format'].lower()}')
+                self.create_image(image, output_file, scale['size'], scale['format'])
 
             self.write_photo_markdown(image)
             
@@ -356,12 +347,12 @@ class QuantumController(PlatformController):
         """Make the api call to delete the image from the platform. We assume the file is not linked anywhere else."""
         try:
 
-            if os.path.exists(self.build_photo_path(image.target_master)):
-                os.remove(self.build_photo_path(image.target_master))
-            if os.path.exists(self.build_photo_path(image.target_thumbnail)):
-                os.remove(self.build_photo_path(image.target_thumbnail))
-            if os.path.exists(self.build_photo_path(image.target_wide)):
-                os.remove(self.build_photo_path(image.target_wide))
+            # Delete all existing files
+            for scale in SCALING_FACTORS:
+                output_file = self.build_photo_path(f'{image.media_id}{scale['suffix']}.{scale['format'].lower()}')
+                if os.path.exists(output_file):
+                    os.remove(output_file)
+
             if os.path.exists(self.build_photo_path(image.target_md)):
                 os.remove(self.build_photo_path(image.target_md))
 
@@ -372,17 +363,23 @@ class QuantumController(PlatformController):
     def commit_update(self, image):
         """Make the api call to update the image on the platform"""
         try:
-            if image.operation == IMatchImage.OP_UPDATE:
-                if os.path.exists(self.build_photo_path(image.target_master)):
-                    os.remove(self.build_photo_path(image.target_master))
-                self.create_master(image)
 
-                if os.path.exists(self.build_photo_path(image.target_thumbnail)):
-                    os.remove(self.build_photo_path(image.target_thumbnail))
-                self.create_thumbnails(image)
+            # To reduce sync load into Obsidian, only create image files
+            # if they are missing or older than original.
+            for scale in SCALING_FACTORS:
+                output_file = self.build_photo_path(f'{image.media_id}{scale['suffix']}.{scale['format'].lower()}')
+                if os.path.exists(output_file) and image.operation == IMatchImage.OP_METADATA:
+                    # Check file modified dates. Metadata writes will update and that's desired.
+                    original_date = os.path.getmtime(image.filename)
+                    output_date = os.path.getmtime(output_file)
+                    if original_date > output_date:
+                        print(f"{self.name}: Image file metadata changed. Regenerating {output_file}")
+                        self.create_image(image, output_file, scale['size'], scale['format'])
+                else:
+                    # File for this scale does not exist or forced update
+                    self.create_image(image, output_file, scale['size'], scale['format'])
 
             self.write_photo_markdown(image)
-
 
             # Update the image in IMatch by adding the attributes below.
             im.IMatchAPI().set_attributes(self.name, image.id, data = {
@@ -412,7 +409,7 @@ class QuantumController(PlatformController):
                     card_template_values = {
                         'page' : image.media_id,
                         'title' : image.title,
-                        'thumbnail' : image.target_thumbnail,
+                        'thumbnail' : image.thumbnail,
                     }
                     card_content = self.templates[QuantumController._CARD_TEMPLATE].format(**card_template_values)
                     cards.append(card_content)
@@ -422,7 +419,7 @@ class QuantumController(PlatformController):
                     'title' : album.name,
                     'cards' : "\n".join(cards),
                     'description' : album.description,
-                    'thumbnail' : random.choice(list(album.images)).target_thumbnail
+                    'thumbnail' : random.choice(list(album.images)).thumbnail
                 }
 
                 md_content = self.templates[QuantumController._ALBUM_TEMPLATE].format(**album_template_values)
