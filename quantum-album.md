@@ -1,11 +1,11 @@
 ---
 aliases:
-  - "{title}"
+  - "Album: {title}"
 tags: 
   - class/album
 datetime: {datetime}
 updated: 
-title: {title}
+title: "Album: {title}"
 description: {description}
 thumbnail: {thumbnail}
 cssclasses:
@@ -14,6 +14,6 @@ cssclasses:
 
 {description}
 
-<div class="grid">
+<div id="my-gallery">
   {cards}
 </div>

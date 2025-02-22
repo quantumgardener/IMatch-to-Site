@@ -1,5 +1,3 @@
-<div class="grid-item">
-  <a href="https://quantumgardener.info/photos/{page}">
-    <img src="https://quantumgardener.info/photos/{thumbnail}" alt="{title}"/>
-  </a>
-</div>
+<a href="/photos/{page}">
+    <img src="/photos/{thumbnail}" alt="{title}"/>
+</a>
