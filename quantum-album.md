@@ -1,6 +1,7 @@
 ---
 aliases:
   - "Album: {title}"
+  - "{title}"
 tags: 
   - class/album
 datetime: {datetime}
