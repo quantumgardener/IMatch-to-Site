@@ -22,7 +22,7 @@ SCALING_FACTORS = [
     { "size" : 320, "suffix" : "_n", "format" : "WEBP" },
     { "size" : 500, "suffix" : "", "format" : "WEBP" },
     { "size" : 640, "suffix" : "_z", "format" : "WEBP" },
-    { "size" : 800, "suffix" : "_c", "format" : "JPEG" },
+    { "size" : 800, "suffix" : "_c", "format" : "WEBP" },
 ]
 
 class QuantumImage(IMatchImage):
@@ -80,11 +80,14 @@ class QuantumImage(IMatchImage):
     
     @property
     def master(self) -> str:
-        return f'{self.media_id}_c.{QuantumController._MASTER_FORMAT.lower()}'
+        return self.filename_for_size("c")
 
     @property
     def thumbnail(self) -> str:
-        return f'{self.media_id}_t.{QuantumController._THUMBNAIL_FORMAT.lower()}'
+        return self.filename_for_size("t")
+    
+    def filename_for_size(self, size: str) -> str:
+        return f'{self.media_id}_{size.lower()}.webp'
 
 class QuantumController(PlatformController):
 
@@ -95,8 +98,6 @@ class QuantumController(PlatformController):
     _MAP_TEMPLATE = "map"
     _ALBUM_TEMPLATE = "album"
     _CARD_TEMPLATE = "card"
-    _MASTER_FORMAT = "JPEG"
-    _THUMBNAIL_FORMAT = "WEBP"
     
     def __init__(self, platform_name, preferred_format, allowed_formats):
         super().__init__(platform_name, preferred_format, allowed_formats)
@@ -206,7 +207,7 @@ class QuantumController(PlatformController):
             img = img.resize(new_size, Image.LANCZOS)
             img.save(output_file, format=format, quality=quality)
 
-        if format == "JPEG":
+        if format == "JPEG" or format == "WEBP":
             # Add back XMP information
             exiftool = r"C:\Program Files\photools.com\imatch6\exiftool.exe"
             exiftool = os.path.normpath(exiftool)
@@ -409,7 +410,7 @@ class QuantumController(PlatformController):
                     card_template_values = {
                         'page' : image.media_id,
                         'title' : image.title,
-                        'thumbnail' : image.thumbnail,
+                        'thumbnail' : image.filename_for_size('m'),
                     }
                     card_content = self.templates[QuantumController._CARD_TEMPLATE].format(**card_template_values)
                     cards.append(card_content)
@@ -419,7 +420,7 @@ class QuantumController(PlatformController):
                     'title' : album.name,
                     'cards' : "\n".join(cards),
                     'description' : album.description,
-                    'thumbnail' : random.choice(list(album.images)).thumbnail
+                    'thumbnail' : random.choice(list(album.images)).filename_for_size('m')
                 }
 
                 md_content = self.templates[QuantumController._ALBUM_TEMPLATE].format(**album_template_values)
