@@ -7,11 +7,6 @@
                 "description" : "Images scanned from prints. Mostly from 35mm, but not all. Consequently quality is fairly low and colours are often off."
             },
             {
-                "name" : "Basic Moods of Life",
-                "id" : "basic-moods-of-life",
-                "description" : "Fractal art representing six of the Basic Moods of Life."
-            },
-            {
                 "name" : "Beasties and Critters",
                 "id" : "beasties-and-critters",
                 "description" : "The animals we we share our planet with."
@@ -72,14 +67,14 @@
                 "description" : "Bendigo does not lie in a river. And in the early days a plan was hatched to build eight reservoirs. No 1. leaked, No.7 was built and plans for the remaining six abandoned."
             },
             {
-                "name" : "Panoramas",
-                "id" : "panoramas",
-                "description" : "I do love me a wider perspective on life."
+                "name" : "People Being People",
+                "id" : "people-being-people",
+                "description" : "People doing people things."
             },
             {
-                "name" : "People",
-                "id" : "people",
-                "description" : "People doing people things."
+                "name" : "Seeing the Basic Moods of Life",
+                "id" : "seeing-the-basic-moods-of-life",
+                "description" : "Fractal art representing six of the Basic Moods of Life."
             },
             {
                 "name" : "The Sky Above",
@@ -95,6 +90,11 @@
                 "name" : "Warhammer Miniatures",
                 "id" : "warhammer-miniatujres",
                 "description" : "Photos of my Warhammer miniature collection. All hand-painted by me."
+            },
+            {
+                "name" : "The Wider Perspective",
+                "id" : "the-wider-perspective",
+                "description" : "I do love me a wider perspective on life."
             }
         ]
     }
