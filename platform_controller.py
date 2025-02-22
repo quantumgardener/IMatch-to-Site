@@ -47,14 +47,15 @@ class PlatformController():
 
         progress_counter = 1
         progress_end = len(self.images_to_add)
+        padding = len(str(progress_end))
         for image in self.images_to_add:
 
             # Upload the media, then the status with the media attached. 
             if self.testing:
-                print(f'{self.name}: **TEST** Adding {image.filename} ({image.size/config.MB_SIZE:2.1f} MB) ({progress_counter}/{progress_end}) "{image.title}"')
+                print(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] **TEST** Adding {image.filename} ({image.size/config.MB_SIZE:2.1f} MB) "{image.title}"')
                 progress_counter += 1       
                 continue                            
-            print(f'{self.name}: Adding {image.filename} ({image.size/config.MB_SIZE:2.1f} MB) ({progress_counter}/{progress_end}) "{image.title}"')
+            print(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] Adding {image.filename} ({image.size/config.MB_SIZE:2.1f} MB) "{image.title}"')
 
             self.commit_add(image)
             progress_counter += 1
@@ -100,12 +101,13 @@ class PlatformController():
         deleted_images = set()
         progress_counter = 1
         progress_end = len(self.images_to_delete)
+        padding = len(str(progress_end))
         for image in self.images_to_delete:
             if self.testing:
-                print(f'{self.name}: **Test** Deleting ({progress_counter}/{progress_end}) "{image.title}"')
+                print(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] **Test** Deleting "{image.title}"')
                 progress_counter += 1       
                 continue    
-            print(f'{self.name}: Deleting {image.filename} ({progress_counter}/{progress_end}) "{image.title}"  ... {image.name}')
+            print(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] Deleting "{image.title}"  ... {image.name}')
 
             self.commit_delete(image)
             deleted_images.add(image.id)
@@ -165,6 +167,7 @@ class PlatformController():
 
         progress_counter = 1
         progress_end = len(self.images_to_update)
+        padding = len(str(progress_end))
         for image in self.images_to_update:
 
             if image.operation == IMatchImage.OP_UPDATE:
@@ -172,12 +175,12 @@ class PlatformController():
             else:
                 action = "metadata"
         
+            
             if self.testing:
-                
-                print(f'{self.name}: **TEST** Updating {action} for {image.filename} ({image.size/config.MB_SIZE:2.1f} MB) ({progress_counter}/{progress_end}) "{image.title}"')
+                print(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] **TEST** Updating {action} for {image.filename} ({image.size/config.MB_SIZE:2.1f} MB) "{image.title}"')
                 progress_counter += 1       
                 continue
-            print(f'{self.name}: Updating {action} for {image.filename} ({image.size/config.MB_SIZE:2.1f} MB) ({progress_counter}/{progress_end}) "{image.title}"')
+            print(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] Updating {action} for {image.filename} ({image.size/config.MB_SIZE:2.1f} MB) "{image.title}"')
 
             self.commit_update(image)
 
