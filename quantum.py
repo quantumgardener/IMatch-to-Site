@@ -84,7 +84,7 @@ class QuantumImage(IMatchImage):
 
     @property
     def thumbnail(self) -> str:
-        return self.filename_for_size("t")
+        return self.filename_for_size("m")
     
     def filename_for_size(self, size: str) -> str:
         return f'{self.media_id}_{size.lower()}.webp'
