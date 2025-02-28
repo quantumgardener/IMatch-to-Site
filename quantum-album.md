@@ -15,6 +15,6 @@ cssclasses:
 
 {description}
 
-<div id="my-gallery">
+<div id="my-gallery" class="justified-gallery">
   {cards}
 </div>
