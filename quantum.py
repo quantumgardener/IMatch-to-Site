@@ -149,13 +149,16 @@ class QuantumController(PlatformController):
                 map = ""
                 logging.debug("Map skipped")
 
+
+            # Add location as keywords
+            for location in image.location.split(", "):
+                image.add_hierarchical_keyword(location)
+
             property_keywords = {"class/photo"}
             for keyword in sorted(image.hierarchical_keywords):
                 property_keywords.add(f"keyword/{keyword}")
 
-            for location in image.location.split(", "):
-                property_keywords.add(f"keyword/{location.lower()}")
-
+            
             # for album in self.albums.values():
             #     if image in album.images:
             #         property_keywords.add(f"album/{album.id}")
