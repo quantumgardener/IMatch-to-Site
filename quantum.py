@@ -419,6 +419,7 @@ class QuantumController(PlatformController):
                     'datetime' : max(dates).strftime('%Y-%m-%dT%H:%M:%S'),
                     'title' : album.name,
                     'cards' : "\n".join(cards),
+                    'count' : len(cards),
                     'description' : album.description,
                     'thumbnail' : random.choice(list(album.images)).filename_for_size('m')
                 }

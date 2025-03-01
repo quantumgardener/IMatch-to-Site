@@ -15,6 +15,10 @@ cssclasses:
 
 {description}
 
+{count} photos in the album. 
+
+---
+
 <div id="my-gallery" class="justified-gallery">
   {cards}
 </div>
