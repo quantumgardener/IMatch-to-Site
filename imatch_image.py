@@ -54,6 +54,9 @@ class IMatchImage():
             "varcountry" : "{File.MD.Composite\\MWG-Country\\Country\\0}",
             "varstate" : "{File.MD.Composite\\MWG-State\\State\\0}",
             "varcity" : "{File.MD.Composite\\MWG-City\\City\\0}",
+            "varcopyright" : "{File.MD.XMP::dc\\rights\\Rights\\0}",
+            "varcopyrightmarked" : "{File.MD.XMP::xmpRights\\Marked\\Marked\\0}",
+            "varcopyrighturl" : "{File.MD.XMP::xmpRights\\WebStatement\\WebStatement\\0}"
         }
         
 
