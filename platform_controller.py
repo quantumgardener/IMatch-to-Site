@@ -52,10 +52,10 @@ class PlatformController():
 
             # Upload the media, then the status with the media attached. 
             if self.testing:
-                print(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] **TEST** Adding {image.filename} ({image.size/config.MB_SIZE:2.1f} MB) "{image.title}"')
+                print(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] **TEST** Adding {image.name} ({image.size/config.MB_SIZE:2.1f} MB) "{image.title}"')
                 progress_counter += 1       
                 continue                            
-            print(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] Adding {image.filename} ({image.size/config.MB_SIZE:2.1f} MB) "{image.title}"')
+            print(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] Adding {image.name} ({image.size/config.MB_SIZE:2.1f} MB) "{image.title}"')
 
             self.commit_add(image)
             progress_counter += 1
@@ -177,10 +177,10 @@ class PlatformController():
         
             
             if self.testing:
-                print(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] **TEST** Updating {action} for {image.filename} ({image.size/config.MB_SIZE:2.1f} MB) "{image.title}"')
+                print(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] **TEST** Updating {action} for {image.name} ({image.size/config.MB_SIZE:2.1f} MB) "{image.title}"')
                 progress_counter += 1       
                 continue
-            print(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] Updating {action} for {image.filename} ({image.size/config.MB_SIZE:2.1f} MB) "{image.title}"')
+            print(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] Updating {action} for {image.name} ({image.size/config.MB_SIZE:2.1f} MB) "{image.title}"')
 
             self.commit_update(image)
 
