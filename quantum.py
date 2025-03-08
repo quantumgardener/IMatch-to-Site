@@ -26,9 +26,32 @@ SCALING_FACTORS = [
 ]
 
 class QuantumImage(IMatchImage):
+        
+    _PHOTO_TEMPLATE = "photo"
+    _MAP_TEMPLATE = "map"
 
     def __init__(self, id, platform) -> None:
         super().__init__(id, platform)
+        self.templates = {
+            QuantumImage._PHOTO_TEMPLATE : None,
+            QuantumImage._MAP_TEMPLATE : None,
+        }    
+
+        photo_template_filename = os.path.join(os.path.dirname(os.path.abspath(__file__)),'quantum-photo.md')
+        if os.path.exists(photo_template_filename):
+            with open(photo_template_filename, 'r') as file:
+                self.templates[QuantumImage._PHOTO_TEMPLATE] = file.read()
+        else:
+            logging.error('Connection error: {photo_template_filename} not found.')
+            sys.exit(1)
+
+        map_template_filename = os.path.join(os.path.dirname(os.path.abspath(__file__)),'quantum-photo-map.md')
+        if os.path.exists(map_template_filename):
+            with open(map_template_filename, 'r') as file:
+                self.templates[QuantumImage._MAP_TEMPLATE] = file.read()
+        else:
+            logging.error('Connection error: {map_template_filename} not found.')
+            sys.exit(1)
 
     def _prepare_for_operations(self) -> None:
         """Build variables ready for uploading."""
@@ -65,7 +88,7 @@ class QuantumImage(IMatchImage):
     @property
     def is_valid(self) -> bool:
         result = super().is_valid
-        for attribute in ['make', 'model', 'country', 'state']:
+        for attribute in ['make', 'model', 'country', 'state', 'copyright', 'copyrightmarked', 'copyrighturl']:
             try:
                 if getattr(self, attribute).strip() == '':
                     self.errors.append(f"missing {attribute}")
@@ -88,122 +111,12 @@ class QuantumImage(IMatchImage):
     
     def filename_for_size(self, size: str) -> str:
         return f'{self.media_id}_{size.lower()}.webp'
-
-class QuantumController(PlatformController):
-
-    _MAX_SIZE = 25 * config.MB_SIZE
-    _PHOTOS_PATH = "photos"
-    _ALBUMS_PATH = "albums"
-    _PHOTO_TEMPLATE = "photo"
-    _MAP_TEMPLATE = "map"
-    _ALBUM_TEMPLATE = "album"
-    _CARD_TEMPLATE = "card"
     
-    def __init__(self, platform_name, preferred_format, allowed_formats):
-        super().__init__(platform_name, preferred_format, allowed_formats)
-
-        self.templates = {
-            QuantumController._PHOTO_TEMPLATE : None,
-            QuantumController._MAP_TEMPLATE : None,
-            QuantumController._ALBUM_TEMPLATE : None,
-            QuantumController._CARD_TEMPLATE : None,
-        }    
-        logging.debug(f'{self.name}: Instance initialised.')
-
-    def classify_images(self):
-        super().classify_images()
-        for image in self.images:
-            if image.operation != IMatchImage.OP_INVALID:
-                for category in image.categories:
-                    splits = category['path'].split("|")
-                    match splits[0]:
-                        case "Socials":
-                            if splits[1] == self.name:
-                                # Need to grab any albums and groups
-                                try:
-                                    if splits[2] == "albums":
-                                        # Code is in the description
-                                        name = splits[3]
-                                        try:
-                                            self.albums[name].add(image)
-                                        except KeyError:
-                                            logging.error(f'{self.name}: Unknown album "{name}". Check data.json.')
-                                            sys.exit(1)
-                                except IndexError:
-                                    pass #no groups or albums found
-
-    def write_photo_markdown(self, image):
-
-        try:
-
-            map_values = {
-                'latitude' : image.latitude,
-                'longitude' : image.longitude,
-                'key' : im.IMatchAPI.get_application_variable("quantum_map_key")            
-            }
-
-            if not image.is_image_in_category(im.IMatchAPI.get_application_variable("quantum_hide_me")):
-                map = self.templates[QuantumController._MAP_TEMPLATE].format(**map_values)
-                logging.debug("Map included")
-            else:
-                map = ""
-                logging.debug("Map skipped")
-
-
-            # Add location as keywords
-            for location in image.location.split(", "):
-                image.add_hierarchical_keyword(location)
-
-            property_keywords = {"class/photo"}
-            for keyword in sorted(image.hierarchical_keywords):
-                property_keywords.add(f"keyword/{keyword}")
-
-            
-            # for album in self.albums.values():
-            #     if image in album.images:
-            #         property_keywords.add(f"album/{album.id}")
-
-            template_values = {
-                'ai_description' : html.unescape(image.ai_description),
-                'aperture' : '{0:.3g}'.format(float(image.aperture)) if image.aperture != "" else "_unknown_",
-                'camera' : image.model,
-                'date_taken' : image.date_time.strftime('%Y-%m-%dT%H:%M:%S'),
-                'description' : html.unescape(f'{image.headline} {image.description.replace("\n", " ")}') if image.description != "" else "_unknown_",
-                'focal_length' : image.focal_length if image.focal_length != "" else "_unknown_",
-                'image_path' : image.master,
-                'iso' : image.iso if image.iso != "" else "_unknown_",
-                'lens' : image.lens if image.lens != "" else "_unknown_",
-                'location' : image.location,
-                'property_keywords' : "\n".join(f"  - {item}" for item in sorted(property_keywords)),
-                'shutter_speed' : image.shutter_speed if image.shutter_speed != "" else "_unknown_",
-                'title' : image.title,
-                'thumbnail' : f"[[{image.thumbnail}]]",
-                'map' : map,
-            }
-
-            if( image.latitude == "" or image.longitude == ""):
-                raise ValueError(f"Missing latitude and longitude in image {image.name}")
-
-            # OK to overwrite this every time
-            md_content = self.templates[QuantumController._PHOTO_TEMPLATE].format(**template_values)
-
-            ## Clean out lines with "unknown"
-            lines = md_content.split("\n")
-            filtered_lines = [line for line in lines if "_unknown_" not in line]
-            filtered_markdown = "\n".join(filtered_lines)
-
-        except KeyError as e:
-            print(f"No value for {e} in template")
-            sys.exit(1)
- 
-        with open(os.path.join(self.api[QuantumController._PHOTOS_PATH], image.target_md), 'w') as file:
-            file.write(filtered_markdown)
-
-    def create_image(self, image, output_file, long_edge, format, quality=85):
+    def create_image_from_master(self, output_file, long_edge, format, quality=85):
         """Create image from original as specified"""
 
         logging.debug(f"Creating image: {output_file}")
-        with Image.open(image.filename) as img:
+        with Image.open(self.filename) as img:
             width, height = img.size
             scaling_factor = int(long_edge) / max(width, height)
             new_size = (int(width * scaling_factor), int(height * scaling_factor))
@@ -217,7 +130,7 @@ class QuantumController(PlatformController):
             command = [
                 exiftool,
                 '-TagsFromFile',
-                image.filename,
+                self.filename,
                 '-xmp:CreateDate',
                 '-xmp-photoshop:DateCreated',
                 '-xmp-dc:Title',
@@ -246,9 +159,116 @@ class QuantumController(PlatformController):
                 logging.error(f"An error occurred: {e}")
                 sys.exit(1)
 
-        if os.path.getsize(output_file) > QuantumController._MAX_SIZE:
+        if os.path.getsize(output_file) > self.controller._MAX_SIZE:
             self.errors.append(f"file too large")
             raise ValueError("Image too large after conversion")
+
+    def create_photo_markdown(self):
+        try:
+            map_values = {
+                'latitude' : self.latitude,
+                'longitude' : self.longitude,
+                'key' : im.IMatchAPI.get_application_variable("quantum_map_key")            
+            }
+
+            if not self.is_image_in_category(im.IMatchAPI.get_application_variable("quantum_hide_me")):
+                map = self.templates[QuantumImage._MAP_TEMPLATE].format(**map_values)
+                logging.debug("Map included")
+            else:
+                map = ""
+                logging.debug("Map skipped")
+
+
+            # Add location as keywords
+            for location in self.location.split(", "):
+                self.add_hierarchical_keyword(location)
+
+            property_keywords = {"class/photo"}
+            for keyword in sorted(self.hierarchical_keywords):
+                property_keywords.add(f"keyword/{keyword}")
+
+            
+            # for album in self.albums.values():
+            #     if self in album.images:
+            #         property_keywords.add(f"album/{album.id}")
+
+            template_values = {
+                'ai_description' : html.unescape(self.ai_description),
+                'aperture' : '{0:.3g}'.format(float(self.aperture)) if self.aperture != "" else "_unknown_",
+                'camera' : self.model,
+                'date_taken' : self.date_time.strftime('%Y-%m-%dT%H:%M:%S'),
+                'description' : html.unescape(f'{self.headline} {self.description.replace("\n", " ")}') if self.description != "" else "_unknown_",
+                'focal_length' : self.focal_length if self.focal_length != "" else "_unknown_",
+                'image_path' : self.master,
+                'iso' : self.iso if self.iso != "" else "_unknown_",
+                'lens' : self.lens if self.lens != "" else "_unknown_",
+                'location' : self.location,
+                'property_keywords' : "\n".join(f"  - {item}" for item in sorted(property_keywords)),
+                'shutter_speed' : self.shutter_speed if self.shutter_speed != "" else "_unknown_",
+                'title' : self.title,
+                'thumbnail' : f"[[{self.thumbnail}]]",
+                'map' : map,
+            }
+
+            if( self.latitude == "" or self.longitude == ""):
+                raise ValueError(f"Missing latitude and longitude in image {self.name}")
+
+            # OK to overwrite this every time
+            md_content = self.templates[QuantumImage._PHOTO_TEMPLATE].format(**template_values)
+
+            ## Clean out lines with "unknown"
+            lines = md_content.split("\n")
+            filtered_lines = [line for line in lines if "_unknown_" not in line]
+            filtered_markdown = "\n".join(filtered_lines)
+
+        except KeyError as e:
+            print(f"No value for {e} in template")
+            sys.exit(1)
+ 
+        output_file = self.controller.build_photo_path(self.target_md)
+        with open(output_file, 'w', encoding='utf-8') as file:
+            file.write(filtered_markdown)
+
+
+class QuantumController(PlatformController):
+
+    _MAX_SIZE = 25 * config.MB_SIZE
+    _PHOTOS_PATH = "photos"
+    _ALBUMS_PATH = "albums"
+    _ALBUM_TEMPLATE = "album"
+    _CARD_TEMPLATE = "card"
+    
+    def __init__(self, platform_name, preferred_format, allowed_formats):
+        super().__init__(platform_name, preferred_format, allowed_formats)
+
+        self.templates = {
+            QuantumController._ALBUM_TEMPLATE : None,
+            QuantumController._CARD_TEMPLATE : None,
+        }    
+        logging.debug(f'{self.name}: Instance initialised.')
+
+    def classify_images(self):
+        super().classify_images()
+        for image in self.images:
+            if image.operation != IMatchImage.OP_INVALID:
+                for category in image.categories:
+                    splits = category['path'].split("|")
+                    match splits[0]:
+                        case "Socials":
+                            if splits[1] == self.name:
+                                # Need to grab any albums and groups
+                                try:
+                                    if splits[2] == "albums":
+                                        # Code is in the description
+                                        name = splits[3]
+                                        try:
+                                            self.albums[name].add(image)
+                                        except KeyError:
+                                            logging.error(f'{self.name}: Unknown album "{name}". Check data.json.')
+                                            sys.exit(1)
+                                except IndexError:
+                                    pass #no groups or albums found
+
 
     def connect(self):
         try:
@@ -262,25 +282,7 @@ class QuantumController(PlatformController):
                 }
 
                 logging.debug(f"checking for {self.api[QuantumController._PHOTOS_PATH]}.")
-                if os.path.exists(self.api[QuantumController._PHOTOS_PATH]) and os.path.isdir(self.api[QuantumController._PHOTOS_PATH]):
-                    photo_template_filename = os.path.join(os.path.dirname(os.path.abspath(__file__)),'quantum-photo.md')
-                    if os.path.exists(photo_template_filename):
-                        with open(photo_template_filename, 'r') as file:
-                            self.templates[QuantumController._PHOTO_TEMPLATE] = file.read()
-                    else:
-                        logging.error('Connection error: {photo_template_filename} not found.')
-                        sys.exit(1)
-
-                    map_template_filename = os.path.join(os.path.dirname(os.path.abspath(__file__)),'quantum-photo-map.md')
-                    if os.path.exists(map_template_filename):
-                        with open(map_template_filename, 'r') as file:
-                            self.templates[QuantumController._MAP_TEMPLATE] = file.read()
-                    else:
-                        logging.error('Connection error: {map_template_filename} not found.')
-                        sys.exit(1)
-
-
-                else:
+                if not(os.path.exists(self.api[QuantumController._PHOTOS_PATH]) and os.path.isdir(self.api[QuantumController._PHOTOS_PATH])):
                     logging.error(f'Connection error: {self.api[QuantumController._PHOTOS_PATH]} not found.')
                     sys.exit(1)
 
@@ -328,9 +330,9 @@ class QuantumController(PlatformController):
             # Because we're adding, assume all existing images are to be overwritten
             for scale in SCALING_FACTORS:
                 output_file = self.build_photo_path(f'{image.media_id}{scale['suffix']}.{scale['format'].lower()}')
-                self.create_image(image, output_file, scale['size'], scale['format'])
+                image.create_image_from_master(output_file, scale['size'], scale['format'])
 
-            self.write_photo_markdown(image)
+            image.create_photo_markdown()
             
             # Update the image in IMatch by adding the attributes below.
             im.IMatchAPI().set_attributes(self.name, image.id, data = {
@@ -378,12 +380,12 @@ class QuantumController(PlatformController):
                     output_date = os.path.getmtime(output_file)
                     if original_date > output_date:
                         print(f"{self.name}: Image file metadata changed. Regenerating {output_file}")
-                        self.create_image(image, output_file, scale['size'], scale['format'])
+                        image.create_image_from_master(output_file, scale['size'], scale['format'])
                 else:
                     # File for this scale does not exist or forced update
-                    self.create_image(image, output_file, scale['size'], scale['format'])
+                    image.create_image_from_master(output_file, scale['size'], scale['format'])
 
-            self.write_photo_markdown(image)
+            image.create_photo_markdown()
 
             # Update the image in IMatch by adding the attributes below.
             im.IMatchAPI().set_attributes(self.name, image.id, data = {
