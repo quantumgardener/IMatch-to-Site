@@ -79,7 +79,7 @@ if __name__ == "__main__":
             for image_id in images:
                 image = Factory.build_image(image_id, controller)
                 count += 1
-                print(f"{controller.name}: Gathering images from IMatch [{(count / max_images) * 100:3.0f}%]", end='\r')
+                print(f"{controller.name}: Gathering images from IMatch [{count:3.0f} of {max_images}]", end='\r')
             print()
             print(f"{controller.name}: {controller.stats['total']} images gathered from IMatch to action.")
 
