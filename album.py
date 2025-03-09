@@ -57,6 +57,10 @@ class Album():
             for album in data[controller]['albums']:
                 albums[album['name']] = Album(album['name'], album['id'], album['description'])
 
+        except json.decoder.JSONDecodeError as e:
+            logging.error(f"{controller}: Unexpected error loading json file : {data_file}")
+            logging.error(f"{controller}: {e}")
+            sys.exit(1)
         except FileNotFoundError:
             logging.error(f"{controller}: Unable to create albums. JSON file not found: {data_file}")
             sys.exit(1)
