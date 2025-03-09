@@ -82,6 +82,11 @@
                 "description" : "Fractal art representing six of the Basic Moods of Life."
             },
             {
+                "name" : "The Old Town",
+                "id" : "the-old-town",
+                "description" : "A series of images from Den Gamle By (The Old Town) in Aarhus, Denmark."
+            },
+            {
                 "name" : "The Sky Above",
                 "id" : "the-sky-above",
                 "description" : "The sky at any time of the day or night."
