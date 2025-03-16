@@ -46,6 +46,7 @@ class IMatchImage():
             "varlens" : "{File.MD.lens}",
             "varmake" : "{File.MD.make}",
             "varmodel" : "{File.MD.model}",
+            "varcameraname" : "{File.MD.photools.com::IMatch\\1510\\cameraname\\0}",
             "varshutter_speed" : "{File.MD.shutterspeed|value:formatted}",
             "varlatitude" : "{File.MD.gpslatitude|value:rawfrm}",
             "varlongitude" : "{File.MD.gpslongitude|value:rawfrm}",

@@ -195,7 +195,7 @@ class QuantumImage(IMatchImage):
             template_values = {
                 'ai_description' : html.unescape(self.ai_description),
                 'aperture' : '{0:.3g}'.format(float(self.aperture)) if self.aperture != "" else "_unknown_",
-                'camera' : self.model,
+                'camera' : self.cameraname,
                 'date_taken' : self.date_time.strftime('%Y-%m-%dT%H:%M:%S'),
                 'description' : html.unescape(f'{self.headline} {self.description.replace("\n", " ")}') if self.description != "" else "_unknown_",
                 'focal_length' : self.focal_length if self.focal_length != "" else "_unknown_",
