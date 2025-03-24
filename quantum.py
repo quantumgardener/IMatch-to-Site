@@ -192,10 +192,17 @@ class QuantumImage(IMatchImage):
             #     if self in album.images:
             #         property_keywords.add(f"album/{album.id}")
 
+            match self.cameraname:
+                case "Canon EOS 400D DIGITAL":
+                    camera = "Canon EOS 400D"
+                case _:
+                    camera = self.cameraname
+
+
             template_values = {
                 'ai_description' : html.unescape(self.ai_description),
                 'aperture' : '{0:.3g}'.format(float(self.aperture)) if self.aperture != "" else "_unknown_",
-                'camera' : self.cameraname,
+                'camera' : camera,
                 'date_taken' : self.date_time.strftime('%Y-%m-%dT%H:%M:%S'),
                 'description' : html.unescape(f'{self.headline} {self.description.replace("\n", " ")}') if self.description != "" else "_unknown_",
                 'focal_length' : self.focal_length if self.focal_length != "" else "_unknown_",
