@@ -7,6 +7,11 @@
                 "description" : "Images scanned from prints. Mostly from 35mm, but not all. Consequently quality is fairly low and colours are often off."
             },
             {
+                "name" : "Abstract Architecture",
+                "id" : "abstract-architecture",
+                "description" : "Getting close and personal with architecture. You see part and your imagination fills the rest."
+            },
+            {
                 "name" : "Adelaide Awakenings",
                 "id" : "adelaide-awakenings",
                 "description" : "With our daughter living in Adelaide now, we are making many trips a year and slowly discovering this beautiful city."
