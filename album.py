@@ -38,7 +38,10 @@ class Album():
 
     def __ne__(self, other):
         return self.name != other.name
-
+    
+    def __hash__(self):
+        return hash((self.id, self.name)) 
+    
     def add(self, image):
         if not isinstance(image, IMatchImage):
             raise TypeError(f"Attempt to add something other than an image to album: {self.name}")

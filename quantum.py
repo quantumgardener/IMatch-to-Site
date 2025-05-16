@@ -32,6 +32,7 @@ class QuantumImage(IMatchImage):
 
     def __init__(self, id, platform) -> None:
         super().__init__(id, platform)
+        self.albums = set()
         self.templates = {
             QuantumImage._PHOTO_TEMPLATE : None,
             QuantumImage._MAP_TEMPLATE : None,
@@ -187,24 +188,43 @@ class QuantumImage(IMatchImage):
             for keyword in sorted(self.hierarchical_keywords):
                 property_keywords.add(f"keyword/{keyword}")
 
-            
-            # for album in self.albums.values():
-            #     if self in album.images:
-            #         property_keywords.add(f"album/{album.id}")
+            albums = set()
+            for album in self.controller.albums.values():
+                if self in album.images:
+                    albums.add(album)
+
+            albumlist = "_unknown_"
+            if len(albums) > 0:
+                sorted_albums = sorted(albums, key=lambda x: x.name)
+                if len(sorted_albums) > 1:
+                    albumlist = ", ".join(f'[[{a.id}\\|{a.name}]]' for a in sorted_albums[:-1]) + " and " + f'[[{sorted_albums[-1].id}\\|{sorted_albums[-1].name}]]'
+                else:
+                    albumlist = f'[[{sorted_albums[0].id}\\|{sorted_albums[0].name}]]'
 
             match self.cameraname:
                 case "Canon EOS 400D DIGITAL":
                     camera = "Canon EOS 400D"
+                case _ if self.cameraname.startswith("Apple"):
+                    camera = f'Apple iPhone\\|{self.cameraname}'
                 case _:
                     camera = self.cameraname
 
+            description = "_unknown_"
+            if self.description != "":
+                description = html.unescape(f'{self.headline} {self.description.replace("\n", " ")}')
+                if len(albums) > 0:
+                    description += f" This photo appears in {albumlist}."
+            else:
+                if len(albums) > 0:
+                    description = f" This photo appears in {albumlist}."
 
             template_values = {
                 'ai_description' : html.unescape(self.ai_description),
+                'albums' : albumlist,
                 'aperture' : '{0:.3g}'.format(float(self.aperture)) if self.aperture != "" else "_unknown_",
                 'camera' : camera,
                 'date_taken' : self.date_time.strftime('%Y-%m-%dT%H:%M:%S'),
-                'description' : html.unescape(f'{self.headline} {self.description.replace("\n", " ")}') if self.description != "" else "_unknown_",
+                'description' : description,
                 'focal_length' : self.focal_length if self.focal_length != "" else "_unknown_",
                 'image_path' : self.master,
                 'iso' : self.iso if self.iso != "" else "_unknown_",

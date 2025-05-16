@@ -14,7 +14,7 @@ cssclasses:
 
 ![[{image_path}|{ai_description}]]
 
-| <i class="nf nf-fa-camera"></i>                                  | [[{camera}]]                         |
+| <i class="nf nf-fa-camera"></i>                                   | [[{camera}]]                         |
 | ----------------------------------------------------------------- | ------------------------------------ |
 | <i class="nf nf-md-eye"></i>                                      | {lens}                               |
 | <i class="nf nf-md-camera_iris"></i>                              | *f*/{aperture}                       |
