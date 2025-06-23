@@ -209,27 +209,26 @@ class QuantumImage(IMatchImage):
                 case _:
                     camera = self.cameraname
 
-            description = "_unknown_"
+            description = ""
             if self.description != "":
-                description = html.unescape(f'{self.headline} {self.description.replace("\n", " ")}')
-                if len(albums) > 0:
-                    description += f" This photo appears in {albumlist}."
-            else:
-                if len(albums) > 0:
-                    description = f" This photo appears in {albumlist}."
+                description = html.unescape(f'{self.headline} {self.description.replace("\n", " ")} ')
+
+            albums = "_unknown_"
+            if len(albums) > 0:
+                albums = f"This photo appears in {albumlist}."
 
             template_values = {
                 'ai_description' : html.unescape(self.ai_description),
-                'albums' : albumlist,
+                'albums' : albums,
                 'aperture' : '{0:.3g}'.format(float(self.aperture)) if self.aperture != "" else "_unknown_",
                 'camera' : camera,
                 'date_taken' : self.date_time.strftime('%Y-%m-%dT%H:%M:%S'),
                 'description' : description,
-                'focal_length' : self.focal_length if self.focal_length != "" else "_unknown_",
+                'focal_length' : self.focal_length.replace(" mm","mm") if self.focal_length != "" else "_unknown_",
                 'image_path' : self.master,
                 'iso' : self.iso if self.iso != "" else "_unknown_",
                 'lens' : self.lens if self.lens != "" else "_unknown_",
-                'location' : self.location,
+                'location' : ', '.join(reversed(self.location.split(', '))),
                 'property_keywords' : "\n".join(f"  - {item}" for item in sorted(property_keywords)),
                 'shutter_speed' : self.shutter_speed if self.shutter_speed != "" else "_unknown_",
                 'title' : self.title,
