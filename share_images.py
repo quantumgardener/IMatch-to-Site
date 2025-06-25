@@ -1,6 +1,7 @@
 import sys
 import logging
 import pprint
+import time
 
 import config
 import IMatchAPI as im
@@ -51,6 +52,8 @@ if __name__ == "__main__":
     if not sys.version_info >= (3, 10):
         print(f"Python version 3.10 or later required. You are running with version {sys.version_info.major}.{sys.version_info.minor}")
         sys.exit()
+
+    start_time = time.time()
 
     # Retreive the complete list of Socials files from IMatch for all known
     # platforms. Within IMatch, files are in the Socials|{platform} category
@@ -110,7 +113,7 @@ if __name__ == "__main__":
     #     print(f"-- {stats[val]} {val} images")
     
     print("--------------------------------------------------------------------------------------")
-    print("Done.")
+    print(f"Done in {time.time()-start_time:.2f}s")
     sys.exit(0)
 
 

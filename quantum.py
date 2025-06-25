@@ -15,6 +15,7 @@ from platform_controller import PlatformController
 from album import Album
 import IMatchAPI as im
 import config
+import scan_files
 
 SCALING_FACTORS = [
     { "size" : 100, "suffix" : "_t", "format" : "WEBP" },
@@ -78,10 +79,6 @@ class QuantumImage(IMatchImage):
         if not hasattr(self, "description"):
             self.description = ""
         
-        match = re.search(r'\[(\d+)\]', self.filename)
-        if not match:
-            raise ValueError(f'{self.name}: Unable to extract digits from filename')
-        self.media_id = match.group(1)
         self.target_md = f'{self.media_id}.md'
         logging.debug(f'media_id: {self.media_id}')
         logging.debug(f'target_md: {self.target_md}')
@@ -295,6 +292,9 @@ class QuantumController(PlatformController):
                                 except IndexError:
                                     pass #no groups or albums found
 
+        if len(self.images_to_delete) > 0:
+            pattern = r"\d{6}_[cmntz]\.webp"
+            self.image_references = scan_files.scan_folder_with_subfolders(im.IMatchAPI.get_application_variable("quantum_path"), pattern, {"photos", "albums", ".obsidian"})
 
     def connect(self):
         try:
@@ -385,8 +385,9 @@ class QuantumController(PlatformController):
                 if os.path.exists(output_file):
                     os.remove(output_file)
 
-            if os.path.exists(self.build_photo_path(image.target_md)):
-                os.remove(self.build_photo_path(image.target_md))
+            md_path = self.build_photo_path(image.target_md)
+            if os.path.exists(md_path):
+                os.remove(self.build_photo_path(md_path))
 
         except Exception as e:
             logging.error(f"{self.name}: An unexpected error occurred: {e}")
@@ -428,6 +429,22 @@ class QuantumController(PlatformController):
             logging.error(f"{self.name}: unexpected error occurred: {e}")
             sys.exit()
     
+    def delete_images(self):
+        if len(self.images_to_delete) == 0:
+            return  # Nothing to see here
+
+        for image in self.images_to_delete.copy():
+            if image.media_id in self.image_references.keys():
+                self.images_to_delete.remove(image)
+                print(f'{self.name}: Image in use "{image.title}" ({image.media_id})')
+                image.errors.append("referenced file")
+                self.invalid_images.add(image)
+                for referenced_image in self.image_references[image.media_id]:
+                    print(f"--{referenced_image[0]}")
+
+        super().delete_images()
+        
+
     def generate_albums(self):
         self.connect()
 

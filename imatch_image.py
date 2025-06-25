@@ -1,6 +1,8 @@
 from datetime import datetime
 import logging
 from pprint import pprint
+import re
+import sys
 
 import IMatchAPI as im
 import config
@@ -19,6 +21,7 @@ class IMatchImage():
 
     def __init__(self, id, controller) -> None:
         self.id = id
+        self.media_id = None
         self.errors = []    # hold any errors raised during the process
         self.controller = controller 
         self.controller.register_image(self)
@@ -72,6 +75,14 @@ class IMatchImage():
                 case "fileName":    # fileName is a special case. Ask for filename, get fileName in results
                     setattr(self, "filename", image_info[attribute])
                     logging.debug(f'Setting filename to {image_info[attribute]}')
+                case "name":
+                    match = re.search(r'\[(\d+)\]', image_info[attribute])
+                    if match:
+                        self.media_id = match.group(1)
+                        setattr(self, attribute, image_info[attribute])
+                    else:
+                        print(f"Unable to extract media_id from {image_info[attribute]}")
+                        sys.exit()
                 case "model":
                     if image_info[attribute] == "Canon EOS 400D DIGITAL":
                         setattr(self, attribute, "Canon EOS 400D")

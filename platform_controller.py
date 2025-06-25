@@ -20,6 +20,7 @@ class PlatformController():
         self.images_to_update = set()
         self.invalid_images = set()
         self.albums = {}
+        self.image_references = None #List of images referenced in vault .md files
         self.api = None  # Holds the platform api connection once active
         self.testing = im.IMatchAPI.get_application_variable("imatch_to_socials_testing") == 1  # = 0 live, 1 = testing
 
@@ -76,7 +77,6 @@ class PlatformController():
                     self.invalid_images.add(image)
                 case other:
                     pass
-
 
     def commit_add(self, image):
         """Make the api call to commit the image to the platform, and update IMatch with reference details"""
