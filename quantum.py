@@ -1,3 +1,4 @@
+from concurrent.futures import ProcessPoolExecutor
 import datetime
 import html
 import logging
@@ -24,7 +25,86 @@ SCALING_FACTORS = [
     { "size" : 500, "suffix" : "", "format" : "WEBP" },
     { "size" : 640, "suffix" : "_z", "format" : "WEBP" },
     { "size" : 800, "suffix" : "_c", "format" : "WEBP" },
+    { "size" : 1024, "suffix" : "_b", "format" : "WEBP" },
+    { "size" : 1600, "suffix" : "_h", "format" : "WEBP" },
 ]
+
+exiftool_tag_args = [
+    "-xmp:CreateDate",
+    "-xmp-photoshop:DateCreated",
+    "-xmp-dc:Title",
+    "-xmp-dc:Description",
+    "-xmp-xmpRights:All",
+    "-xmp-xmp:Rights",
+    "-xmp-dc:rights",
+    "-XMP-photoshop:Country",
+    "-XMP-photoshop:State",
+    "-XMP-photoshop:City",
+    "-XMP-iptcCore:Location",
+    "-overwrite_original"
+]
+
+def create_image_version(input_file, output_file, long_edge, format, quality=85):
+    """Create image from original as specified"""
+    logging.debug(f"Creating image: {output_file}")
+    with Image.open(input_file) as img:
+        width, height = img.size
+        if max(width,height) > long_edge:
+            scaling_factor = int(long_edge) / max(width, height)
+            new_size = (int(width * scaling_factor), int(height * scaling_factor))
+            img = img.resize(new_size, Image.LANCZOS)
+        img.save(output_file, format=format, quality=quality)
+
+
+def prepare_image_versions(args):
+    return create_image_version(*args)
+
+
+def set_metadata(tasks):
+    exiftool_tasks = []
+    for task in tasks:
+        src, tgt, *_= task
+        exiftool_tasks.append((src, tgt))
+
+    with ExifToolSession() as et:    
+        for src, tgt in exiftool_tasks:
+            try:
+                cmd = ['-TagsFromFile', src] + exiftool_tag_args + [tgt]
+                response = et.send(cmd)
+                logging.debug(f"[{tgt}] Metadata copied successfully.\n{response.strip()}")
+            except Exception as e:
+                logging.error(f"Failed to copy metadata to {tgt}: {e}")
+
+
+class ExifToolSession:
+    def __enter__(self):
+        self.process = subprocess.Popen(
+            [os.path.normpath(r"C:\Program Files\photools.com\imatch6\exiftool.exe"), '-stay_open', 'True', '-@', '-'],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True,
+            bufsize=1
+        )
+        return self
+
+    def send(self, commands):
+        block = '\n'.join(commands) + '\n-execute\n'
+        self.process.stdin.write(block)
+        self.process.stdin.flush()
+
+        output = ''
+        while True:
+            line = self.process.stdout.readline()
+            if line.strip() == '{ready}':
+                break
+            output += line
+        return output
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.process.stdin.write('-stay_open\nFalse\n')
+        self.process.stdin.flush()
+        self.process.terminate()
 
 class QuantumImage(IMatchImage):
         
@@ -110,57 +190,7 @@ class QuantumImage(IMatchImage):
     def filename_for_size(self, size: str) -> str:
         return f'{self.media_id}_{size.lower()}.webp'
     
-    def create_image_from_master(self, output_file, long_edge, format, quality=85):
-        """Create image from original as specified"""
-
-        logging.debug(f"Creating image: {output_file}")
-        with Image.open(self.filename) as img:
-            width, height = img.size
-            scaling_factor = int(long_edge) / max(width, height)
-            new_size = (int(width * scaling_factor), int(height * scaling_factor))
-            img = img.resize(new_size, Image.LANCZOS)
-            img.save(output_file, format=format, quality=quality)
-
-        if format == "JPEG" or format == "WEBP":
-            # Add back XMP information
-            exiftool = r"C:\Program Files\photools.com\imatch6\exiftool.exe"
-            exiftool = os.path.normpath(exiftool)
-            command = [
-                exiftool,
-                '-TagsFromFile',
-                self.filename,
-                '-xmp:CreateDate',
-                '-xmp-photoshop:DateCreated',
-                '-xmp-dc:Title',
-                '-xmp-dc:Description',
-                '-xmp-xmpRights:All',
-                '-xmp-xmp:Rights',
-                '-xmp-dc:rights',
-                '-XMP-photoshop:Country',
-                '-XMP-photoshop:State',
-                '-XMP-photoshop:City',
-                '-overwrite_original',
-                output_file
-            ]
-
-            try:
-                result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                if result.returncode != 0:
-                    logging.error(f"Error copying metadata: {result.stderr}")
-                    sys.exit(1)
-                else:
-                    logging.debug("Metadata copied successfully.")
-            except FileNotFoundError:
-                logging.error(f"ExifTool not found at {exiftool}")
-                sys.exit(1)
-            except Exception as e:
-                logging.error(f"An error occurred: {e}")
-                sys.exit(1)
-
-        if os.path.getsize(output_file) > self.controller._MAX_SIZE:
-            self.errors.append(f"file too large")
-            raise ValueError("Image too large after conversion")
-
+    
     def create_photo_markdown(self):
         try:
             map_values = {
@@ -262,7 +292,7 @@ class QuantumController(PlatformController):
     _CARD_TEMPLATE = "card"
     
     def __init__(self, platform_name, preferred_format, allowed_formats):
-        super().__init__(platform_name, preferred_format, allowed_formats)
+        super().__init__(platform_name, preferred_format, allowed_formats)     
 
         self.templates = {
             QuantumController._ALBUM_TEMPLATE : None,
@@ -270,6 +300,24 @@ class QuantumController(PlatformController):
         }    
         logging.debug(f'{self.name}: Instance initialised.')
 
+    def add_images(self):
+        super().add_images()
+
+        tasks = []
+        # Bulk process creation of image version files
+        for image in self.images_to_add:
+            for scale in SCALING_FACTORS:
+                output_file = self.build_photo_path(f'{image.media_id}{scale['suffix']}.{scale['format'].lower()}')
+                tasks.append((image.filename, output_file, scale['size'], scale['format']))
+
+        if (len(tasks) > 0):
+            print(f'{self.name}: Generating image versions (adds)')
+            with ProcessPoolExecutor() as executor:
+                executor.map(prepare_image_versions, tasks)
+
+            set_metadata(tasks)
+            
+    
     def classify_images(self):
         super().classify_images()
         for image in self.images:
@@ -353,11 +401,6 @@ class QuantumController(PlatformController):
         """Make the api call to commit the image to the platform, and update IMatch with reference details"""
         try:
            
-            # Because we're adding, assume all existing images are to be overwritten
-            for scale in SCALING_FACTORS:
-                output_file = self.build_photo_path(f'{image.media_id}{scale['suffix']}.{scale['format'].lower()}')
-                image.create_image_from_master(output_file, scale['size'], scale['format'])
-
             image.create_photo_markdown()
             
             # Update the image in IMatch by adding the attributes below.
@@ -396,22 +439,6 @@ class QuantumController(PlatformController):
     def commit_update(self, image):
         """Make the api call to update the image on the platform"""
         try:
-
-            # To reduce sync load into Obsidian, only create image files
-            # if they are missing or older than original.
-            for scale in SCALING_FACTORS:
-                output_file = self.build_photo_path(f'{image.media_id}{scale['suffix']}.{scale['format'].lower()}')
-                if os.path.exists(output_file) and image.operation == IMatchImage.OP_METADATA:
-                    # Check file modified dates. Metadata writes will update and that's desired.
-                    original_date = os.path.getmtime(image.filename)
-                    output_date = os.path.getmtime(output_file)
-                    if original_date > output_date:
-                        print(f"{self.name}: Image file metadata changed. Regenerating {output_file}")
-                        image.create_image_from_master(output_file, scale['size'], scale['format'])
-                else:
-                    # File for this scale does not exist or forced update
-                    image.create_image_from_master(output_file, scale['size'], scale['format'])
-
             image.create_photo_markdown()
 
             # Update the image in IMatch by adding the attributes below.
@@ -444,7 +471,35 @@ class QuantumController(PlatformController):
 
         super().delete_images()
         
+    def update_images(self):
+        super().update_images()
 
+        tasks = []
+        # Bulk process creation of image version files
+        for image in self.images_to_update:
+            # To reduce sync load into Obsidian, only create image files
+            # if they are missing or older than original.
+            for scale in SCALING_FACTORS:
+                output_file = self.build_photo_path(f'{image.media_id}{scale['suffix']}.{scale['format'].lower()}')
+                if os.path.exists(output_file) and image.operation == IMatchImage.OP_METADATA:
+                    # Check file modified dates. Metadata writes will update and that's desired.
+                    original_date = os.path.getmtime(image.filename)
+                    output_date = os.path.getmtime(output_file)
+                    if original_date > output_date:
+                        logging.debug(f"{self.name}: Image file metadata changed. Regenerating {output_file}")
+                        tasks.append((image.filename, output_file, scale['size'], scale['format']))
+                else:
+                    # File for this scale does not exist or forced update
+                    tasks.append((image.filename, output_file, scale['size'], scale['format']))
+
+        if (len(tasks) > 0):
+            print(f'{self.name}: Generating image versions (updates)')
+            with ProcessPoolExecutor() as executor:
+                executor.map(prepare_image_versions, tasks)
+
+            set_metadata(tasks)
+        
+            
     def generate_albums(self):
         self.connect()
 
@@ -456,6 +511,7 @@ class QuantumController(PlatformController):
                 for image in album.images:
                     dates.append(image.date_time)
                     card_template_values = {
+                        'fullsize' : image.filename_for_size('c'),
                         'page' : image.media_id,
                         'title' : image.title,
                         'thumbnail' : image.filename_for_size('m'),
@@ -481,3 +537,13 @@ class QuantumController(PlatformController):
                     file.write(md_content)
             else:
                 print(f"{self.name}: Skipping empty album {album.name}.")
+
+
+
+# # Build the full command
+# cmd = ["exiftool"]
+# for src, tgt in pairs:
+#     cmd += ["-TagsFromFile", src] + tag_args + [tgt]
+
+# # Execute once with all arguments
+# subprocess.run(cmd)
