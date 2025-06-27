@@ -257,6 +257,7 @@ class QuantumImage(IMatchImage):
                 'lens' : self.lens if self.lens != "" else "_unknown_",
                 'location' : ', '.join(reversed(self.location.split(', '))),
                 'property_keywords' : "\n".join(f"  - {item}" for item in sorted(property_keywords)),
+                'orientation' : 'landscape' if self.width >= self.height else 'portrait',
                 'shutter_speed' : self.shutter_speed if self.shutter_speed != "" else "_unknown_",
                 'title' : self.title,
                 'thumbnail' : f"[[{self.thumbnail}]]",
@@ -513,6 +514,7 @@ class QuantumController(PlatformController):
                     card_template_values = {
                         'fullsize' : image.filename_for_size('c'),
                         'page' : image.media_id,
+                        'orientation' : 'landscape' if image.width >= image.height else 'portrait',
                         'title' : image.title,
                         'thumbnail' : image.filename_for_size('m'),
                     }
@@ -538,12 +540,3 @@ class QuantumController(PlatformController):
             else:
                 print(f"{self.name}: Skipping empty album {album.name}.")
 
-
-
-# # Build the full command
-# cmd = ["exiftool"]
-# for src, tgt in pairs:
-#     cmd += ["-TagsFromFile", src] + tag_args + [tgt]
-
-# # Execute once with all arguments
-# subprocess.run(cmd)

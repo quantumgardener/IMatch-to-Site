@@ -38,7 +38,7 @@ class IMatchImage():
         # Get this image's information from IMatch. Process and save each
         # as an attribute for easier reference.
         image_params = {
-            "fields" : "datetime,filename,format,name,size", 
+            "fields" : "datetime,filename,format,height,name,size,width", 
             "tagtitle" : "title",
             "tagdescription" : "description",
             "taghierarchical_keywords" : "hierarchicalkeywords",

@@ -7,6 +7,7 @@ datetime: {date_taken}
 updated: 
 title: {title}
 thumbnail: "{thumbnail}"
+orientation: "{orientation}"
 cssclasses:
   - photo-page
 ---
