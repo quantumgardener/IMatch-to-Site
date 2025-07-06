@@ -1,4 +1,6 @@
+import json
 import logging
+import os
 import pprint
 import sys
 
@@ -25,6 +27,25 @@ class PlatformController():
         self.testing = im.IMatchAPI.get_application_variable("imatch_to_socials_testing") == 1  # = 0 live, 1 = testing
 
         self.albums = Album.load(self.name)
+
+        data_file = os.path.join(os.path.dirname(os.path.abspath(__file__)),'data.json')
+
+        ## Load all important locations
+        try:
+            with open(data_file, "r") as file:
+                data = json.load(file)
+
+                self.locations = data['locations']
+        except json.decoder.JSONDecodeError as e:
+            logging.error(f"{self.name}: Unexpected error loading json file : {data_file}")
+            logging.error(f"{self.name}: {e}")
+            sys.exit(1)
+        except FileNotFoundError:
+            logging.error(f"{self.name}: Unable to create locations. JSON file not found: {data_file}")
+            sys.exit(1)
+        except KeyError:
+            logging.error(f"{self.name}: Unable to create locations. Data missing from: {data_file}")
+            sys.exit(1)
 
     def __repr__(self):
         return f'{self.name} with {len(self.images)} and {len(self.albums)}.'

@@ -112,5 +112,25 @@
                 "description" : "I do love me a wider perspective on life."
             }
         ]
+    },
+    "locations" : {
+        "flora hill|home - 1 capper court" : {
+            "visibility" : false
+        },
+        "golden square|ron & bev's - 6 tabitha court" : {
+            "visibility" : false
+        },
+        "golden square|abc golden square" : {
+            "visibility" : false
+        },
+        "golden square|home - 118 maple street" : {
+            "visibility" : false
+        },
+        "strathdale|home - 83 harley street" : {
+            "visibility" : false
+        },
+        "strathdale|home - 94 harley street" : {
+            "visibility" : false
+        }
     }
 }

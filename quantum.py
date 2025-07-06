@@ -5,7 +5,6 @@ import logging
 import os
 from pprint import pprint
 import random
-import re
 import subprocess
 import sys
 
@@ -29,7 +28,7 @@ SCALING_FACTORS = [
     { "size" : 1600, "suffix" : "_h", "format" : "WEBP" },
 ]
 
-exiftool_tag_args = [
+exiftool_public_tag_args = [
     "-xmp:CreateDate",
     "-xmp-photoshop:DateCreated",
     "-xmp-dc:Title",
@@ -41,6 +40,20 @@ exiftool_tag_args = [
     "-XMP-photoshop:State",
     "-XMP-photoshop:City",
     "-XMP-iptcCore:Location",
+    "-overwrite_original"
+]
+
+exiftool_private_tag_args = [
+    "-xmp:CreateDate",
+    "-xmp-photoshop:DateCreated",
+    "-xmp-dc:Title",
+    "-xmp-dc:Description",
+    "-xmp-xmpRights:All",
+    "-xmp-xmp:Rights",
+    "-xmp-dc:rights",
+    "-XMP-photoshop:Country",
+    "-XMP-photoshop:State",
+    "-XMP-photoshop:City",
     "-overwrite_original"
 ]
 
@@ -60,16 +73,12 @@ def prepare_image_versions(args):
     return create_image_version(*args)
 
 
-def set_metadata(tasks):
-    exiftool_tasks = []
-    for task in tasks:
-        src, tgt, *_= task
-        exiftool_tasks.append((src, tgt))
-
+def set_metadata(exiftool_tasks):
     with ExifToolSession() as et:    
-        for src, tgt in exiftool_tasks:
+        for src, tgt, isPrivate in exiftool_tasks:
             try:
-                cmd = ['-TagsFromFile', src] + exiftool_tag_args + [tgt]
+                args = exiftool_private_tag_args if isPrivate else exiftool_public_tag_args
+                cmd = ['-TagsFromFile', src] + args + [tgt]
                 response = et.send(cmd)
                 logging.debug(f"[{tgt}] Metadata copied successfully.\n{response.strip()}")
             except Exception as e:
@@ -193,27 +202,41 @@ class QuantumImage(IMatchImage):
     
     def create_photo_markdown(self):
         try:
+            display_location = []
+            if len(self.location) > 0: 
+                try:
+                    if self.isPublic:
+                        for part in reversed(self.location.split("|")):
+                            display_location.append(part)
+                except KeyError:
+                    for part in reversed(self.location.split("|")):
+                        display_location.append(part)
+            if len(self.city) > 0:
+                display_location.append(self.city)
+            if len(self.state) > 0:
+                display_location.append(self.state)
+            if len(self.country) > 0:
+                display_location.append(self.country)
+
+            map = ""
             map_values = {
                 'latitude' : self.latitude,
                 'longitude' : self.longitude,
                 'key' : im.IMatchAPI.get_application_variable("quantum_map_key")            
             }
-
-            if not self.is_image_in_category(im.IMatchAPI.get_application_variable("quantum_hide_me")):
+            try:
+                if self.isPublic:
+                    map = self.templates[QuantumImage._MAP_TEMPLATE].format(**map_values)
+            except KeyError:
                 map = self.templates[QuantumImage._MAP_TEMPLATE].format(**map_values)
-                logging.debug("Map included")
-            else:
-                map = ""
-                logging.debug("Map skipped")
+ 
 
-
-            # Add location as keywords
-            for location in self.location.split(", "):
-                self.add_hierarchical_keyword(location)
 
             property_keywords = {"class/photo"}
             for keyword in sorted(self.hierarchical_keywords):
                 property_keywords.add(f"keyword/{keyword}")
+            for location in display_location:
+                property_keywords.add(f"keyword/{location.lower().replace(' ','-')}") ## lowercase and replace spaces
 
             albums = set()
             for album in self.controller.albums.values():
@@ -255,7 +278,7 @@ class QuantumImage(IMatchImage):
                 'image_path' : self.master,
                 'iso' : self.iso if self.iso != "" else "_unknown_",
                 'lens' : self.lens if self.lens != "" else "_unknown_",
-                'location' : ', '.join(reversed(self.location.split(', '))),
+                'location' : ', '.join(display_location),
                 'property_keywords' : "\n".join(f"  - {item}" for item in sorted(property_keywords)),
                 'orientation' : 'landscape' if self.width >= self.height else 'portrait',
                 'shutter_speed' : self.shutter_speed if self.shutter_speed != "" else "_unknown_",
@@ -298,25 +321,28 @@ class QuantumController(PlatformController):
         self.templates = {
             QuantumController._ALBUM_TEMPLATE : None,
             QuantumController._CARD_TEMPLATE : None,
-        }    
+        }
+
         logging.debug(f'{self.name}: Instance initialised.')
 
     def add_images(self):
         super().add_images()
 
-        tasks = []
+        scaling_tasks = []
+        exiftool_tasks = []
         # Bulk process creation of image version files
         for image in self.images_to_add:
             for scale in SCALING_FACTORS:
                 output_file = self.build_photo_path(f'{image.media_id}{scale['suffix']}.{scale['format'].lower()}')
-                tasks.append((image.filename, output_file, scale['size'], scale['format']))
+                scaling_tasks.append((image.filename, output_file, scale['size'], scale['format']))
+                exiftool_tasks.append((image.filename, output_file, image.isPrivate))
 
-        if (len(tasks) > 0):
+        if (len(scaling_tasks) > 0):
             print(f'{self.name}: Generating image versions (adds)')
             with ProcessPoolExecutor() as executor:
-                executor.map(prepare_image_versions, tasks)
+                executor.map(prepare_image_versions, scaling_tasks)
 
-            set_metadata(tasks)
+            set_metadata(exiftool_tasks)
             
     
     def classify_images(self):
@@ -475,7 +501,8 @@ class QuantumController(PlatformController):
     def update_images(self):
         super().update_images()
 
-        tasks = []
+        scaling_tasks = []
+        exiftool_tasks = []
         # Bulk process creation of image version files
         for image in self.images_to_update:
             # To reduce sync load into Obsidian, only create image files
@@ -488,17 +515,19 @@ class QuantumController(PlatformController):
                     output_date = os.path.getmtime(output_file)
                     if original_date > output_date:
                         logging.debug(f"{self.name}: Image file metadata changed. Regenerating {output_file}")
-                        tasks.append((image.filename, output_file, scale['size'], scale['format']))
+                        scaling_tasks.append((image.filename, output_file, scale['size'], scale['format']))
+                        exiftool_tasks.append((image.filename, output_file, image.isPrivate))
                 else:
                     # File for this scale does not exist or forced update
-                    tasks.append((image.filename, output_file, scale['size'], scale['format']))
+                    scaling_tasks.append((image.filename, output_file, scale['size'], scale['format']))
+                    exiftool_tasks.append((image.filename, output_file, image.isPrivate))
 
-        if (len(tasks) > 0):
+        if (len(scaling_tasks) > 0):
             print(f'{self.name}: Generating image versions (updates)')
             with ProcessPoolExecutor() as executor:
-                executor.map(prepare_image_versions, tasks)
+                executor.map(prepare_image_versions, scaling_tasks)
 
-            set_metadata(tasks)
+            set_metadata(exiftool_tasks)
         
             
     def generate_albums(self):

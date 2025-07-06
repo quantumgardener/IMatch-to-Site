@@ -58,6 +58,7 @@ class IMatchImage():
             "varcountry" : "{File.MD.Composite\\MWG-Country\\Country\\0}",
             "varstate" : "{File.MD.Composite\\MWG-State\\State\\0}",
             "varcity" : "{File.MD.Composite\\MWG-City\\City\\0}",
+            "varlocation" : "{File.MD.Composite\\MWG-Location\\Location\\0}",
             "varcopyright" : "{File.MD.XMP::dc\\rights\\Rights\\0}",
             "varcopyrightmarked" : "{File.MD.XMP::xmpRights\\Marked\\Marked\\0}",
             "varcopyrighturl" : "{File.MD.XMP::xmpRights\\WebStatement\\WebStatement\\0}"
@@ -128,12 +129,6 @@ class IMatchImage():
         except AttributeError:
             logging.error("hierarchical keywords missing on image but image has been marked valid.")
 
-        locations = []
-        for l in ['country', 'state', 'city']:
-            if len(getattr(self, l)) > 0: 
-                locations.append(getattr(self, l))
-        self.location = ", ".join(locations)
-
         # Add certain categories as keywords
         logging.debug("Processing base categories")
         for categories in self.categories:
@@ -203,6 +198,19 @@ class IMatchImage():
     @property
     def is_on_platform(self) -> bool:
         raise NotImplementedError("Subclasses must implement is_on_platform()")
+    
+    @property
+    def isPrivate(self) -> bool:
+        if len(self.location) == "":
+            return False
+        try:
+            return not self.controller.locations[self.location.lower()]['visibility']
+        except KeyError:
+            return False
+
+    @property
+    def isPublic(self) -> bool:
+        return not self.isPrivate
     
     @property
     def camera_info(self) -> str:
