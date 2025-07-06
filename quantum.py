@@ -207,16 +207,16 @@ class QuantumImage(IMatchImage):
                 try:
                     if self.isPublic:
                         for part in reversed(self.location.split("|")):
-                            display_location.append(part)
+                            display_location.append(html.unescape(part))
                 except KeyError:
                     for part in reversed(self.location.split("|")):
-                        display_location.append(part)
+                        display_location.append(html.unescape(part))
             if len(self.city) > 0:
-                display_location.append(self.city)
+                display_location.append(html.unescape(self.city))
             if len(self.state) > 0:
-                display_location.append(self.state)
+                display_location.append(html.unescape(self.state))
             if len(self.country) > 0:
-                display_location.append(self.country)
+                display_location.append(html.unescape(self.country))
 
             map = ""
             map_values = {
@@ -236,7 +236,7 @@ class QuantumImage(IMatchImage):
             for keyword in sorted(self.hierarchical_keywords):
                 property_keywords.add(f"keyword/{keyword}")
             for location in display_location:
-                property_keywords.add(f"keyword/{location.lower().replace(' ','-')}") ## lowercase and replace spaces
+                property_keywords.add(html.unescape(f"keyword/{location.lower().replace(' ','-').replace("'","")}")) ## lowercase and replace spaces
 
             albums = set()
             for album in self.controller.albums.values():
