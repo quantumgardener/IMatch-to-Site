@@ -206,10 +206,10 @@ class QuantumImage(IMatchImage):
             if len(self.location) > 0: 
                 try:
                     if self.isPublic:
-                        for part in reversed(self.location.split("|")):
+                        for part in reversed(self.location.split(", ")):
                             display_location.append(html.unescape(part))
                 except KeyError:
-                    for part in reversed(self.location.split("|")):
+                    for part in reversed(self.location.split(", ")):
                         display_location.append(html.unescape(part))
             if len(self.city) > 0:
                 display_location.append(html.unescape(self.city))
