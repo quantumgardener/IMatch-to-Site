@@ -1,17 +1,12 @@
-import json
-import logging
-import os
-import pprint
-import sys
-
 import IMatchAPI as im
 from imatch_image import IMatchImage
 import config
 from album import Album
 
+
 class PlatformController():
 
-    def __init__(self, platform_name, preferred_format, allowed_formats) -> None:
+    def __init__(self, platform_name, album_cls, preferred_format, allowed_formats) -> None:
         self.name = platform_name
         self.preferred_format = preferred_format
         self.allowed_formats = allowed_formats
@@ -21,31 +16,11 @@ class PlatformController():
         self.images_to_delete = set()
         self.images_to_update = set()
         self.invalid_images = set()
-        self.albums = {}
         self.image_references = None #List of images referenced in vault .md files
         self.api = None  # Holds the platform api connection once active
         self.testing = im.IMatchAPI.get_application_variable("imatch_to_socials_testing") == 1  # = 0 live, 1 = testing
-
-        self.albums = Album.load(self.name)
-
-        data_file = os.path.join(os.path.dirname(os.path.abspath(__file__)),'data.json')
-
-        ## Load all important locations
-        try:
-            with open(data_file, "r") as file:
-                data = json.load(file)
-
-                self.locations = data['locations']
-        except json.decoder.JSONDecodeError as e:
-            logging.error(f"{self.name}: Unexpected error loading json file : {data_file}")
-            logging.error(f"{self.name}: {e}")
-            sys.exit(1)
-        except FileNotFoundError:
-            logging.error(f"{self.name}: Unable to create locations. JSON file not found: {data_file}")
-            sys.exit(1)
-        except KeyError:
-            logging.error(f"{self.name}: Unable to create locations. Data missing from: {data_file}")
-            sys.exit(1)
+        self.locations = config.locations
+        self.albums = album_cls.load()
 
     def __repr__(self):
         return f'{self.name} with {len(self.images)} and {len(self.albums)}.'

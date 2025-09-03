@@ -122,7 +122,7 @@ class QuantumImage(IMatchImage):
 
     def __init__(self, id, platform) -> None:
         super().__init__(id, platform)
-        self.albums = set()
+        self.albums = []
         self.templates = {
             QuantumImage._PHOTO_TEMPLATE : None,
             QuantumImage._MAP_TEMPLATE : None,
@@ -175,7 +175,7 @@ class QuantumImage(IMatchImage):
     @property
     def is_valid(self) -> bool:
         result = super().is_valid
-        for attribute in ['make', 'model', 'country', 'state', 'copyright', 'copyrightmarked', 'copyrighturl']:
+        for attribute in ['ai_description']:
             try:
                 if getattr(self, attribute).strip() == '':
                     self.errors.append(f"missing {attribute}")
@@ -222,7 +222,7 @@ class QuantumImage(IMatchImage):
             map_values = {
                 'latitude' : self.latitude,
                 'longitude' : self.longitude,
-                'key' : im.IMatchAPI.get_application_variable("quantum_map_key")            
+                'key' : config.quantum_secrets['map_key']            
             }
             try:
                 if self.isPublic:
@@ -230,8 +230,6 @@ class QuantumImage(IMatchImage):
             except KeyError:
                 map = self.templates[QuantumImage._MAP_TEMPLATE].format(**map_values)
  
-
-
             property_keywords = {"class/photo"}
             for keyword in sorted(self.hierarchical_keywords):
                 property_keywords.add(f"keyword/{keyword}")
@@ -247,9 +245,9 @@ class QuantumImage(IMatchImage):
             if len(albums) > 0:
                 sorted_albums = sorted(albums, key=lambda x: x.name)
                 if len(sorted_albums) > 1:
-                    albumlist = ", ".join(f'[[{a.id}\\|{a.name}]]' for a in sorted_albums[:-1]) + " and " + f'[[{sorted_albums[-1].id}\\|{sorted_albums[-1].name}]]'
+                    albumlist = ", ".join(f'[[{a.slug}\\|{a.name}]]' for a in sorted_albums[:-1]) + " and " + f'[[{sorted_albums[-1].slug}\\|{sorted_albums[-1].name}]]'
                 else:
-                    albumlist = f'[[{sorted_albums[0].id}\\|{sorted_albums[0].name}]]'
+                    albumlist = f'[[{sorted_albums[0].slug}\\|{sorted_albums[0].name}]]'
 
             match self.cameraname:
                 case "Canon EOS 400D DIGITAL":
@@ -315,14 +313,13 @@ class QuantumController(PlatformController):
     _ALBUM_TEMPLATE = "album"
     _CARD_TEMPLATE = "card"
     
-    def __init__(self, platform_name, preferred_format, allowed_formats):
-        super().__init__(platform_name, preferred_format, allowed_formats)     
+    def __init__(self, platform_name, album_cls, preferred_format, allowed_formats):
+        super().__init__(platform_name, album_cls, preferred_format, allowed_formats)     
 
         self.templates = {
             QuantumController._ALBUM_TEMPLATE : None,
             QuantumController._CARD_TEMPLATE : None,
         }
-
         logging.debug(f'{self.name}: Instance initialised.')
 
     def add_images(self):
@@ -353,30 +350,28 @@ class QuantumController(PlatformController):
                     splits = category['path'].split("|")
                     match splits[0]:
                         case "Socials":
-                            if splits[1] == self.name:
-                                # Need to grab any albums and groups
+                            if splits[1] == "albums":
                                 try:
-                                    if splits[2] == "albums":
-                                        # Code is in the description
-                                        name = splits[3]
-                                        try:
-                                            self.albums[name].add(image)
-                                        except KeyError:
-                                            logging.error(f'{self.name}: Unknown album "{name}". Check data.json.')
-                                            sys.exit(1)
+                                    name = splits[2]
+                                    try:
+                                        self.albums[name].add(image)
+                                        logging.debug(f'{self.name}: Adding image to album {name}')
+                                    except KeyError:
+                                        logging.error(f'{self.name}: Missing album configuration for "{name}". Check secrets.json')
+                                        sys.exit(1)
                                 except IndexError:
-                                    pass #no groups or albums found
+                                    pass #no albums found
 
         if len(self.images_to_delete) > 0:
             pattern = r"\d{6}_[cmntz]\.webp"
-            self.image_references = scan_files.scan_folder_with_subfolders(im.IMatchAPI.get_application_variable("quantum_path"), pattern, {"photos", "albums", ".obsidian"})
+            self.image_references = scan_files.scan_folder_with_subfolders(config.quantum_secrets['path'], pattern, {"photos", "albums", ".obsidian"})
 
     def connect(self):
         try:
             if self.api is not None:
                 return
             else:
-                quantum_path = im.IMatchAPI.get_application_variable("quantum_path")
+                quantum_path = config.quantum_secrets['path']
                 self.api = {
                     QuantumController._PHOTOS_PATH : os.path.join(quantum_path, QuantumController._PHOTOS_PATH),
                     QuantumController._ALBUMS_PATH : os.path.join(quantum_path, QuantumController._ALBUMS_PATH)
@@ -409,7 +404,7 @@ class QuantumController(PlatformController):
                     logging.error(f'Connection error: {self.api[QuantumController._ALBUMS_PATH]} not found.')
                     sys.exit(1)
 
-                print(f'{self.name}: Connected to {quantum_path}.')
+                print(f'{self.name}: Outputting to {quantum_path}')
         except Exception as e:
             print(f"An unknown exception occurred in connnecting: {e}")
             sys.exit(1)
@@ -466,7 +461,7 @@ class QuantumController(PlatformController):
     def commit_update(self, image):
         """Make the api call to update the image on the platform"""
         try:
-            image.create_photo_markdown()
+            image.create_photo_markdown()           
 
             # Update the image in IMatch by adding the attributes below.
             im.IMatchAPI().set_attributes(self.name, image.id, data = {
@@ -535,7 +530,7 @@ class QuantumController(PlatformController):
 
         for album in sorted(self.albums.values()):
             if(len(album) > 0):
-                print(f"{self.name}: Creating album for {album.name} [{len(album)} images].")
+                print(f"{self.name}: Creating album for {album.name} [{len(album)} images]")
                 cards = []
                 dates = []
                 for image in album.images:
@@ -562,10 +557,34 @@ class QuantumController(PlatformController):
                 md_content = self.templates[QuantumController._ALBUM_TEMPLATE].format(**album_template_values)
                 md_content = html.unescape(md_content)
 
-                album_filename = self.build_album_path(f"{album.id}.md")
+                album_filename = self.build_album_path(f"{album.slug}.md")
                 logging.debug(f"{self.name}: Writing album to {album_filename}")
                 with open(album_filename, 'w') as file:
                     file.write(md_content)
             else:
                 print(f"{self.name}: Skipping empty album {album.name}.")
 
+
+class QuantumAlbum(Album):
+    def __init__(self, name, description, slug):
+            
+        super().__init__(name, description)
+        self.slug = slug
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}: {self.name} (slug: {self.slug} images:{len(self.images)}), {self.description} '
+    
+    def __hash__(self):
+        return hash((self.slug, self.name)) 
+
+    @classmethod
+    def load(cls):
+        albums = {}
+        for album in config.albums:
+            try:
+                albums[album['name']] = cls(album['name'], album['description'], album['slug'])
+            except KeyError:
+                # If any required fields are missing for the album class, then not a valid album
+                pass
+            
+        return albums

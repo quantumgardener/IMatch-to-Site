@@ -25,6 +25,7 @@ class IMatchImage():
         self.errors = []    # hold any errors raised during the process
         self.controller = controller 
         self.controller.register_image(self)
+        self.albums = set()
 
         self._fetch_information_from_imatch()
         self._set_operations()
@@ -64,7 +65,6 @@ class IMatchImage():
             "varcopyrighturl" : "{File.MD.XMP::xmpRights\\WebStatement\\WebStatement\\0}"
         }
         
-
         logging.debug("Querying image parameters")
         image_info = im.IMatchAPI.get_file_metadata([self.id],image_params)[0]
 
@@ -266,7 +266,7 @@ class IMatchImage():
     
     @property
     def is_valid(self) -> bool:
-        for attribute in ['title', 'hierarchical_keywords', 'ai_description']:
+        for attribute in ['title', 'hierarchical_keywords', 'make', 'model', 'country', 'state', 'copyright', 'copyrightmarked', 'copyrighturl']:
             try:
                 value  = getattr(self, attribute)
                 if isinstance(value, list):

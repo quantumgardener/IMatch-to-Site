@@ -1,3 +1,5 @@
+import json
+
 # Root socials category
 ROOT_CATEGORY = "Socials"
 
@@ -11,3 +13,11 @@ ERROR_CATEGORY = "__errors"
 
 # Standardise reference to Megabyte
 MB_SIZE = 1048576
+
+with open("secrets.json") as f:
+    secrets = json.load(f)
+
+albums = secrets["albums"]
+locations = secrets["locations"]
+flickr_secrets = secrets["flickr"]
+quantum_secrets = secrets["quantum"]

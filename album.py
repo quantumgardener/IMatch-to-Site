@@ -1,21 +1,19 @@
-import json
-import logging
-import os
-import sys
-
+from abc import ABC, abstractmethod
 from imatch_image import IMatchImage
+import config
 
-class Album():
+class Album(ABC):
 
-    def __init__(self, name, id, description):
+    def __init__(self, name, description):
         self.name = name
-        self.id = id
         self.description = description
-
         self.images = set()
 
+    @classmethod
+    @abstractmethod
     def __repr__(self):
-        return f'{self.__class__.__name__}: {self.name} (id: {self.id} images:{len(self.images)}), {self.description} '
+        """Subclasses must implement this."""
+        pass
 
     def __len__(self):
         return len(self.images)
@@ -39,36 +37,28 @@ class Album():
     def __ne__(self, other):
         return self.name != other.name
     
+    def __iter__(self):
+        return iter(self.images)
+    
+    @classmethod
+    @abstractmethod
     def __hash__(self):
-        return hash((self.id, self.name)) 
+        """Subclasses must implement this."""
+        pass
+
     
     def add(self, image):
         if not isinstance(image, IMatchImage):
             raise TypeError(f"Attempt to add something other than an image to album: {self.name}")
         
         self.images.add(image)
+        image.albums.add(self)
         
-    @classmethod 
-    def load(cls, controller):
-        data_file = os.path.join(os.path.dirname(os.path.abspath(__file__)),'data.json')
+    @classmethod
+    @abstractmethod
+    def load(cls):
+        """Subclasses must implement this to load albums from their own source. Return a {} of Album."""
+        pass
 
-        try:
-            with open(data_file, "r") as file:
-                data = json.load(file)
-
-            albums = {}
-            for album in data[controller]['albums']:
-                albums[album['name']] = Album(album['name'], album['id'], album['description'])
-
-        except json.decoder.JSONDecodeError as e:
-            logging.error(f"{controller}: Unexpected error loading json file : {data_file}")
-            logging.error(f"{controller}: {e}")
-            sys.exit(1)
-        except FileNotFoundError:
-            logging.error(f"{controller}: Unable to create albums. JSON file not found: {data_file}")
-            sys.exit(1)
-        except KeyError:
-            logging.error(f"{controller}: Unable to create albums. Data missing from: {data_file}")
-            sys.exit(1)
-
-        return albums
+    
+    

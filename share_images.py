@@ -5,7 +5,9 @@ import time
 
 import config
 import IMatchAPI as im
+import flickr
 import quantum
+
 
 logging.basicConfig(
     stream = sys.stdout,
@@ -18,10 +20,18 @@ class Factory():
     platforms = {
         'quantum' : {
             'image' : quantum.QuantumImage,
+            'album' : quantum.QuantumAlbum,
             'controller' : quantum.QuantumController,
             'preferred_format' : im.IMatchAPI.FORMAT_WEBP,
             'allowed_formats' : [im.IMatchAPI.FORMAT_WEBP, im.IMatchAPI.FORMAT_JPEG]
         },
+        'flickr' : {
+            'image' : flickr.FlickrImage,
+            'album' : flickr.FlickrAlbum,
+            'controller' : flickr.FlickrController,
+            'preferred_format' : im.IMatchAPI.FORMAT_JPEG,
+            'allowed_formats' : [im.IMatchAPI.FORMAT_JPEG]
+        },    
     }
 
     def __init__(self) -> None:
@@ -40,6 +50,7 @@ class Factory():
         try:
             return cls.platforms[platform]['controller'](
                 platform,
+                cls.platforms[platform]['album'],
                 cls.platforms[platform]['preferred_format'],
                 cls.platforms[platform]['allowed_formats']
             )
@@ -48,10 +59,6 @@ class Factory():
             sys.exit()
           
 if __name__ == "__main__":
-
-    if not sys.version_info >= (3, 10):
-        print(f"Python version 3.10 or later required. You are running with version {sys.version_info.major}.{sys.version_info.minor}")
-        sys.exit()
 
     start_time = time.time()
 
@@ -75,7 +82,11 @@ if __name__ == "__main__":
 
     for controller in platform_controllers:
         print( "--------------------------------------------------------------------------------------")
-        images = im.IMatchAPI.get_categories(im.IMatchUtility.build_category([config.ROOT_CATEGORY,controller.name]))['directFiles']
+        try:
+            images = im.IMatchAPI.get_categories(im.IMatchUtility.build_category([config.ROOT_CATEGORY,controller.name]))['directFiles']
+        except TypeError:
+            logging.error(f"{controller.name}: Root socials category missing: {im.IMatchUtility.build_category([config.ROOT_CATEGORY,controller.name])}")
+            sys.exit(1)
         count = 0
         max_images = len(images)
         try:

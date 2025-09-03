@@ -228,7 +228,7 @@ class IMatchAPI:
         params['set'] = set
         params['id'] = IMatchUtility().prepare_filelist(id)
 
-        logging.debug(f"Retrieving attributes for {params['id']}")
+        logging.debug(f"Requesting attributes for {params['id']}")
         response = cls.get_imatch( '/v1/attributes', params)
 
         # Strip away the wrapping from the result
