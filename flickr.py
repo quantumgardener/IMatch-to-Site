@@ -23,7 +23,7 @@ class FlickrImage(IMatchImage):
         self.groups = set()
 
         if self.size > FlickrImage.__MAX_SIZE:
-            logging.warning(f'{self.name}: {self.filename} may be too large to upload: {self.size/config.MB_SIZE:2.1f} MB. Max is {FlickrImage.__MAX_SIZE/config.MB_SIZE:2.1f} MB.')
+            logging.warning(f'{self.name}: {self.filename} may be too large to upload: {self.size/config.MB_SIZE:>6.2f} MB. Max is {FlickrImage.__MAX_SIZE/config.MB_SIZE:>6.2f} MB.')
 
     def _prepare_for_operations(self) -> None:
         """Build variables ready for uploading."""
@@ -37,12 +37,14 @@ class FlickrImage(IMatchImage):
             tmp_description.append('')
 
         if hasattr(self, 'description'):
-            tmp_description.append(self.description)
-            tmp_description.append('')
+            if self.description != "":
+                tmp_description.append(self.description)
+                tmp_description.append('')
 
         if hasattr(self, 'ai_description'):
-            tmp_description.append(self.ai_description)
-            tmp_description.append('')
+            if self.ai_description != "":
+                tmp_description.append(self.ai_description)
+                tmp_description.append('')
 
         if self.circadatecreated != "":
             tmp_description.append(f"Taken ca. {self.date_time.strftime("%#d %B %Y")}.")
