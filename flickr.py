@@ -1,5 +1,5 @@
 from datetime import datetime
-from pprint import pformat
+from pprint import pformat, pprint
 import sys
 import logging
 
@@ -11,8 +11,7 @@ from platform_controller import PlatformController
 from album import Album
 import config
 
-logging.getLogger("flickrapi.core").setLevel(logging.WARN)  # Hide basic info messages
-
+logging.getLogger("flickrapi.core").setLevel(logging.CRITICAL)  # Hide basic info messages from flickr api
 
 class FlickrImage(IMatchImage):
 
@@ -26,9 +25,9 @@ class FlickrImage(IMatchImage):
         if self.size > FlickrImage.__MAX_SIZE:
             logging.warning(f'{self.name}: {self.filename} may be too large to upload: {self.size/config.MB_SIZE:2.1f} MB. Max is {FlickrImage.__MAX_SIZE/config.MB_SIZE:2.1f} MB.')
 
-    def prepare_for_upload(self) -> None:
+    def _prepare_for_operations(self) -> None:
         """Build variables ready for uploading."""
-        super().prepare_for_upload()
+        super()._prepare_for_operations()
 
         #Set up the text items
         tmp_description = []
@@ -37,8 +36,13 @@ class FlickrImage(IMatchImage):
             tmp_description.append(self.headline)
             tmp_description.append('')
 
-        tmp_description.append(self.description)
-        tmp_description.append('')
+        if hasattr(self, 'description'):
+            tmp_description.append(self.description)
+            tmp_description.append('')
+
+        if hasattr(self, 'ai_description'):
+            tmp_description.append(self.ai_description)
+            tmp_description.append('')
 
         if self.circadatecreated != "":
             tmp_description.append(f"Taken ca. {self.date_time.strftime("%#d %B %Y")}.")
@@ -68,7 +72,7 @@ class FlickrImage(IMatchImage):
         if camera_info != '':
             tmp_description.append(camera_info)
 
-        self.full_description = "\n".join(tmp_description)       
+        self.description = "\n".join(tmp_description)
         return None
     
     @property
@@ -116,7 +120,7 @@ class FlickrController(PlatformController):
                                         logging.error(f'{self.name}: Missing album configuration for "{name}". Check secrets.json')
                                         sys.exit(1)
                                 except IndexError:
-                                    pass #no groups or albums found
+                                    pass #no albums found
 
     def connect(self):
         if self.api is not None:
@@ -143,7 +147,7 @@ class FlickrController(PlatformController):
     def commit_add(self, image):       
         """Make the api call to commit the image to the platform, and update IMatch with reference details"""
         try:
-            logging.debug("Image variables\n%s:", pformat(image.__dict__))
+            logging.debug("[commit_add] Image variables\n%s:", pformat(image.__dict__))
             response = self.api.upload(
                 image.filename,
                 title = image.title if image.title != '' else image.name,
@@ -152,16 +156,22 @@ class FlickrController(PlatformController):
                 is_friend = self.privacy['is_friend'],
                 is_family = self.privacy['is_family'],
                 )
-            
+            if response.attrib['stat'] != "ok":
+                raise RuntimeError("Unable to upload image to flickr")
+
             photo_id = response.findtext('photoid')
             
-            # Since we expect no EXIF data in the file, flickr will take the upload time from the last modified date of the file
-            # and ignore XMP::EXIF fields. Fix that by setting the time ourselves. The format we have is 
+            # Set date if needed
             # response = self.api.photos.setDates(photo_id=photo_id, date_taken=str(image.date_time), date_taken_granularity=0)
 
             for album in image.albums:
-                logging.debug(f"Adding {photo_id} to album: {album}")
-                response = self.api.photosets_addPhoto(photoset_id=album.photoset_id, photo_id=photo_id)
+                logging.debug(f"[commit_add] Adding {photo_id} to album: {album}")
+                response = self.api.photosets_addPhoto(
+                    photoset_id=album.photoset_id, 
+                    photo_id=photo_id
+                    )
+                if response.attrib['stat'] != "ok":
+                    raise RuntimeError(f"Unable to image to album: {album.name}, id: {album.photoset_id}")
 
             for group in image.groups:
                 response = self.api.groups_pools_add(group_id=group, photo_id=photo_id)
@@ -169,13 +179,29 @@ class FlickrController(PlatformController):
             # flickr will bring in hierarchical keywords not under our control as level|level|level
             # which frankly is stupid. Easiest way is to delete them all. We don't know quite what
             # it will have loaded.
-            resp = self.api.photos.getInfo(photo_id = photo_id, format = "parsed-json")
-            for badtag in resp['photo']['tags']['tag']:
-                resp = self.api.photos.removeTag(tag_id=badtag['id'])
-                
+            logging.debug("[commit_add] Pulling down image tag info")
+            response = self.api.photos.getInfo(
+                photo_id = photo_id,
+                format="parsed-json"
+                )
+            if response['stat'] != "ok":
+                raise RuntimeError(f"Error accessing getInfo")
+            logging.debug("[commit_add] Image tag info\n%s:", pformat(response['photo']['tags']))
+
+            for tag in response['photo']['tags']['tag']:
+                for keyword in image.hierarchical_keywords:
+                    if tag['raw'] == keyword:
+                        logging.debug(f"[commit_add] Removing tag {tag['id']}")
+                        response = self.api.photos.removeTag(tag_id=tag['id'])               
+                        if response.attrib['stat'] != "ok":
+                            raise RuntimeError(f"Error removing tag {tag['id']}")
             
             # Now add back the "Approved" tags. If added on upload, they combine with IPTC weirdly
-            resp = self.api.photos.addTags(tags=",".join(image.flat_keywords), photo_id=photo_id)
+            response = self.api.photos.addTags(
+                tags=",".join(image.flat_keywords), 
+                photo_id=photo_id)
+            if response.attrib['stat'] != "ok":
+                raise RuntimeError(f"Error adding tags {image.flat_keywords}")
         except flickrapi.FlickrError as fe:
                 logging.error(fe)
                 sys.exit(1)
@@ -194,7 +220,10 @@ class FlickrController(PlatformController):
         try:
             attributes = im.IMatchAPI().get_attributes(self.name, image.id)[0]
             photo_id = attributes['photo_id']
+            logging.debug(f"[commit_delete] Deleting {image.name}, {photo_id}")
             response = self.api.photos.delete(photo_id = photo_id)
+            if response.attrib['stat'] != "ok":
+                raise RuntimeError("Unable to delete image")
         except flickrapi.FlickrError as fe:
             logging.error(fe)
             logging.error(response)
@@ -207,105 +236,160 @@ class FlickrController(PlatformController):
             photo_id = attributes['photo_id']
 
             # Some manually added photos don't have a posted date, so pull it down if needed
-            if 'posted' not in attributes:
-                response = self.api.photos.getInfo(photo_id = photo_id, format = "parsed-json")
-                posted = datetime.fromtimestamp(int(response['photo']['dates']['posted']))
-                im.IMatchAPI.set_attributes(self.name, image.id, data = {
-                    'posted' : str(posted)[:10],
-                    'photo_id' : photo_id,
-                    'url' : f"{im.IMatchAPI.get_application_variable("flickr_url")}/{photo_id}"
-                    })
+            # if 'posted' not in attributes:
+            #     response = self.api.photos.getInfo(photo_id = photo_id, format = "parsed-json")
+            #     posted = datetime.fromtimestamp(int(response['photo']['dates']['posted']))
+            #     im.IMatchAPI.set_attributes(self.name, image.id, data = {
+            #         'posted' : str(posted)[:10],
+            #         'photo_id' : photo_id,
+            #         'url' : f"{config.flickr_secrets["url"]}{photo_id}"
+            #         })
                     
+            logging.debug(f"[commit_update] Set title and description for {photo_id}")
             response = self.api.photos.setMeta(
                 title = image.title if image.title != '' else image.name,
-                description = image.full_description,  
+                description = image.description,  
                 photo_id = photo_id
-                )        
+                )  
+            if response.attrib['stat'] != "ok":
+                raise RuntimeError("Unable to update title and description")
 
             if image.operation == IMatchImage.OP_UPDATE:
                 # Update image alongside metadata
+                logging.debug(f"[commit_update] Replacing image for {photo_id}")
                 response = self.api.replace(
                     filename = image.filename, 
                     photo_id = photo_id
                     )
+                if response.attrib['stat'] != "ok":
+                    raise RuntimeError("Unable to replace image file")
 
-            response = self.api.photos.setDates(photo_id=photo_id, date_taken=str(image.date_time), date_taken_granularity=0)
-            response = self.api.photos.addTags(tags=",".join(image.flat_keywords), photo_id=photo_id)
+            logging.debug(f"[commit_update] Setting dates for {photo_id}")
+            response = self.api.photos.setDates(
+                photo_id=photo_id, 
+                date_taken=str(image.date_time), 
+                date_taken_granularity=0,
+                )
+            if response.attrib['stat'] != "ok":
+                raise RuntimeError("Unable to update date")
+            
+            logging.debug(f"[commit_update] Resetting tags for {photo_id}")
+            ## Get list of assigned tags in flickr
+            response = self.api.photos.getInfo(
+                photo_id = photo_id, 
+                format = "parsed-json")
+            logging.debug("[commit_update] Assigned tags\n%s:", pformat(response['photo']['tags']))
+            for tag in response['photo']['tags']['tag']:
+                if tag['raw'] not in image.flat_keywords:
+                    # Don't want this tag anymore, remove it
+                    logging.debug(f"[commit_update] Removing tag: {tag['raw']}")
+                    response = self.api.photos.removeTag(
+                        tag_id=tag['id']) 
+                    if response.attrib['stat'] != "ok":
+                        raise RuntimeError(f"Unable to remove tag {tag['raw']}")
+
+            response = self.api.photos.addTags(
+                tags=",".join(image.flat_keywords), 
+                photo_id=photo_id
+                )
+            if response.attrib['stat'] != "ok":
+                raise RuntimeError("Unable to add keywords")
+
+            logging.debug(f"[commit_update] Setting permissions for {photo_id}")
             response = self.api.photos.setPerms(
                 photo_id=photo_id,
                 is_public=self.privacy['is_public'],
                 is_friend= self.privacy['is_friend'],
-                is_family = self.privacy['is_family'])
+                is_family = self.privacy['is_family']
+            )
+            if response.attrib['stat'] != "ok":
+                raise RuntimeError("Unable to set permissions")
 
+            logging.debug(f"[commit_update] Requesting contexts for {photo_id}")
             contexts = self.api.photos.getAllContexts(
-                photo_id = photo_id, 
+                photo_id = photo_id,
                 format="parsed-json"
                 )
-            
+            if contexts['stat'] != "ok":
+                raise RuntimeError("Unable to get contexts (sets and groups)")
+
+
+            album_ids = {album.photoset_id for album in image.albums}
+
+            ## Remove the image from any flickr photosets that it should not belong to
             try:
+                logging.debug("[commit_update] Contexts (set)\n%s:", pformat(contexts['set']))
                 for flickr_album in contexts['set']:
-                    # Is the image in the album flickr thinks its in
-                    match = list(filter(lambda album: album == flickr_album['id'], image.albums))
-                    if len(match) == 0:
-                        # Flickr says this image is in the album (set). IMatch doesn't think it should be
+                    # Check if any album in image.albums has a matching photoset_id
+                    if flickr_album['id'] not in album_ids:
+                        # Flickr says this image is in the album, but IMatch disagrees
+                        logging.debug(f"[commit_update] Removing image from `{flickr_album['title']}`")
                         response = self.api.photosets_removePhoto(
-                            photoset_id = flickr_album['id'], 
-                            photo_id = photo_id
-                            )
+                            photoset_id=flickr_album['id'],
+                            photo_id=photo_id
+                        )
+                        if response.attrib['stat'] != "ok":
+                            raise RuntimeError(f"Unable to remove image from `{flickr_album['title']}`")
             except KeyError:
                 # No set information returned so not in any flickr albums
+                logging.debug("[commit_update] Not in any photosets. No action required.")
                 pass
 
+            ## Add to any albums it is missing from
             for album in image.albums:
                 if "set" in contexts:
-                    match = list(filter(lambda set: set['id'] == album, contexts['set']))
-                    if len(match) == 0:
+                    flickr_albums = {ps['id'] for ps in contexts['set']}
+                    if album.photoset_id not in flickr_albums:
+                        logging.debug(f"[commit_update] Adding to '{album.name}'")
                         response = self.api.photosets_addPhoto(
-                            photoset_id = album,
+                            photoset_id = album.photoset_id,
                             photo_id = photo_id
-                            )        
+                            ) 
+                        if response.attrib['stat'] != "ok":
+                            raise RuntimeError(f"Unable to add to album '{album.name}")
                 else:
-                    # No albums set, can go ahead and add
+                    logging.debug(f"[commit_update] Adding to '{album.name}'")
                     response = self.api.photosets_addPhoto(
-                        photoset_id = album,
-                        photo_id=photo_id
-                        )
+                        photoset_id = album.photoset_id,
+                        photo_id = photo_id
+                        ) 
+                    if response.attrib['stat'] != "ok":
+                        raise RuntimeError(f"Unable to add to album '{album.name}")
+            # try:
+            #     for flickr_group in contexts['pool']:
+            #         # Is the image in the album flickr thinks its in
+            #         match = list(filter(lambda group: group == flickr_group['id'], image.groups))
+            #         if len(match) == 0:
+            #             # Flickr says this image is in the group (pool). IMatch doesn't think it should be
+            #             response = self.api.groups_pools_remove(
+            #                 group_id=flickr_group['id'],
+            #                 photo_id=photo_id
+            #                 )
+            # except KeyError:
+            #     # No pool information returned so not in any flickr groups
+            #     pass
 
-            try:
-                for flickr_group in contexts['pool']:
-                    # Is the image in the album flickr thinks its in
-                    match = list(filter(lambda group: group == flickr_group['id'], image.groups))
-                    if len(match) == 0:
-                        # Flickr says this image is in the group (pool). IMatch doesn't think it should be
-                        response = self.api.groups_pools_remove(
-                            group_id=flickr_group['id'],
-                            photo_id=photo_id
-                            )
-            except KeyError:
-                # No pool information returned so not in any flickr groups
-                pass
+            # for group in image.groups:
+            #     if "pool" in contexts:
+            #         match = list(filter(lambda set: set['id'] == group, contexts['pool']))
+            #         if len(match) == 0:
+            #             response = self.api.groups_pools_add(
+            #                 group_id = group, 
+            #                 photo_id=photo_id
+            #                 )        
+            #     else:
+            #         # No groups set, can go ahead and add
+            #         response = self.api.groups_pools_add(
+            #             group_id = group, 
+            #             photo_id=photo_id
+            #             )   
 
-            for group in image.groups:
-                if "pool" in contexts:
-                    match = list(filter(lambda set: set['id'] == group, contexts['pool']))
-                    if len(match) == 0:
-                        response = self.api.groups_pools_add(
-                            group_id = group, 
-                            photo_id=photo_id
-                            )        
-                else:
-                    # No groups set, can go ahead and add
-                    response = self.api.groups_pools_add(
-                        group_id = group, 
-                        photo_id=photo_id
-                        )   
-                    
             # Update the image in IMatch by adding the attributes below.
             posted = datetime.now().isoformat()[:10]
             im.IMatchAPI.set_attributes(self.name, image.id, data = {
                 'posted' : posted,
                 'photo_id' : photo_id,
-                'url' : f"{im.IMatchAPI.get_application_variable("flickr_url")}/{photo_id}"
+                'url' : f"{config.flickr_secrets["url"]}{photo_id}"
                 })
             
         except flickrapi.FlickrError as fe:
