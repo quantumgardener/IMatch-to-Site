@@ -1,8 +1,10 @@
+import time
+
 import IMatchAPI as im
 from imatch_image import IMatchImage
 import config
 from album import Album
-
+from utilities import print_clear
 
 class PlatformController():
 
@@ -42,24 +44,28 @@ class PlatformController():
         if not self.testing:        
             self.connect()
 
+        start_time = time.time()
         progress_counter = 1
         progress_end = len(self.images_to_add)
         padding = len(str(progress_end))
         for image in self.images_to_add:
 
-            # Upload the media, then the status with the media attached. 
-            if self.testing:
-                print(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] **TEST** Adding {image.name} ({image.size/config.MB_SIZE:>6.2f} MB) "{image.title}"')
-                progress_counter += 1       
-                continue                            
-            print(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] Adding {image.name} ({image.size/config.MB_SIZE:>6.2f} MB) "{image.title}"')
+            # # Upload the media, then the status with the media attached. 
+            # if self.testing:
+            #     print(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] **TEST** Adding {image.name} ({image.size/config.MB_SIZE:>6.2f} MB) "{image.title}"')
+            #     progress_counter += 1       
+            #     continue                            
+            print_clear(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] Adding {image.name} ({image.size/config.MB_SIZE:0.2f} MB) "{image.title}"', end='\r')
 
             self.commit_add(image)
             progress_counter += 1
 
+        print_clear(f"{self.name}: Added {progress_counter-1} images in {time.time()-start_time:.2f}s")
+
     def classify_images(self):
-        print( f'{self.name}: Classifying images.')
+        count = 0
         for image in self.images:
+            print( f'{self.name}: Classifying images [{count:3.0f} of {len(self.images)}]', end='\r')
             match image.operation:
                 case IMatchImage.OP_ADD:
                     self.images_to_add.add(image)
@@ -73,6 +79,10 @@ class PlatformController():
                     self.invalid_images.add(image)
                 case other:
                     pass
+            count += 1
+        
+        print_clear( f'{self.name}: {count} images classified (add: {len(self.images_to_add)}, update: {len(self.images_to_update)}, delete: {len(self.images_to_delete)}, invalid: {len(self.invalid_images)})')
+
 
     def commit_add(self, image):
         """Make the api call to commit the image to the platform, and update IMatch with reference details"""
@@ -94,6 +104,7 @@ class PlatformController():
         if not self.testing:
             self.connect()
 
+        start_time = time.time()
         deleted_images = set()
         progress_counter = 1
         progress_end = len(self.images_to_delete)
@@ -103,7 +114,7 @@ class PlatformController():
                 print(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] **Test** Deleting "{image.title}"')
                 progress_counter += 1       
                 continue    
-            print(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] Deleting "{image.title}"  ... {image.name}')
+            print(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] Deleting "{image.title}"  ... {image.name}', end="\r")
 
             self.commit_delete(image)
             deleted_images.add(image.id)
@@ -119,6 +130,7 @@ class PlatformController():
             list(deleted_images)
             )
         im.IMatchAPI.delete_attributes(self.name,list(deleted_images))
+        print_clear(f"{self.name}: Deleted {progress_counter-1} images in {time.time()-start_time:.2f}s")
 
     def get_album(self, name):
         try:
@@ -136,7 +148,7 @@ class PlatformController():
 
         if len(self.invalid_images) > 0:
 
-            print( "--------------------------------------------------------------------------------------")
+            print_clear( "--------------------------------------------------------------------------------------")
             print(f"{self.name}: Images with errors detected and assigned to '{config.ROOT_CATEGORY}|{self.name}' error categories.")
             for image in sorted(self.invalid_images, key=lambda x: x.name):
                 for error in image.errors:
@@ -148,7 +160,7 @@ class PlatformController():
     def summarise(self):
         """Output summary of images processed"""
         stats = self.stats
-        print( "--------------------------------------------------------------------------------------")
+        print_clear( "--------------------------------------------------------------------------------------")
         print(f"{self.name}: Summary of images processed")
         for val in stats.keys():
             print(f"-- {stats[val]} {val} images")
@@ -161,6 +173,7 @@ class PlatformController():
         if not self.testing:
             self.connect()
 
+        start_time = time.time()
         progress_counter = 1
         progress_end = len(self.images_to_update)
         padding = len(str(progress_end))
@@ -173,10 +186,10 @@ class PlatformController():
         
             
             if self.testing:
-                print(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] **TEST** Updating {action} for {image.name} ({image.size/config.MB_SIZE:>6.2f} MB) "{image.title}"')
+                print(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] **TEST** Updating {action} for {image.name} ({image.size/config.MB_SIZE:5.2f} MB) "{image.title}"')
                 progress_counter += 1       
                 continue
-            print(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] Updating {action} for {image.name} ({image.size/config.MB_SIZE:>6.2f} MB) "{image.title}"')
+            print_clear(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] Updating {action} for {image.name} ({image.size/config.MB_SIZE:0.2f} MB) "{image.title}"', end='\r')
 
             self.commit_update(image)
 
@@ -198,10 +211,11 @@ class PlatformController():
                         config.UPDATE_METADATA_CATEGORY
                         ]), 
                     image.id
-                    )
-                
+                    )     
 
-            progress_counter += 1       
+            progress_counter += 1
+        
+        print_clear(f"{self.name}: Updated {progress_counter-1} images in {time.time()-start_time:.2f}s")
 
     @property
     def stats(self):

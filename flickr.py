@@ -10,6 +10,7 @@ import IMatchAPI as im
 from platform_controller import PlatformController
 from album import Album
 import config
+from utilities import print_clear
 
 logging.getLogger("flickrapi.core").setLevel(logging.CRITICAL)  # Hide basic info messages from flickr api
 
@@ -160,24 +161,48 @@ class FlickrController(PlatformController):
                 )
             if response.attrib['stat'] != "ok":
                 raise RuntimeError("Unable to upload image to flickr")
+        except flickrapi.FlickrError as fe:
+            print_clear()
+            logging.error(f"Error adding file: {fe}")
+            sys.exit(1)
 
-            photo_id = response.findtext('photoid')
+        photo_id = response.findtext('photoid')
             
-            # Set date if needed
-            # response = self.api.photos.setDates(photo_id=photo_id, date_taken=str(image.date_time), date_taken_granularity=0)
+        try:
+            # Force date. Sometimes exif date does not pull through, especially for scans
+            logging.debug(f"[commit_add] Setting date for {image.filename}")
+            response = self.api.photos.setDates(
+                photo_id=photo_id, 
+                date_taken=str(image.date_time), 
+                date_taken_granularity=0
+                )
+            if response.attrib['stat'] != "ok":
+                raise RuntimeError(f"Unable to set date for {image.filename}")
+        except flickrapi.FlickrError as fe:
+            print_clear()
+            logging.error(f"Unable to set date for {image.filename}")
+            logging.erorr(fe)
+            sys.exit(1)
 
-            for album in image.albums:
-                logging.debug(f"[commit_add] Adding {photo_id} to album: {album}")
+        for album in image.albums:
+            logging.debug(f"[commit_add] Adding {photo_id} to album: {album}")
+            try:
                 response = self.api.photosets_addPhoto(
                     photoset_id=album.photoset_id, 
                     photo_id=photo_id
                     )
                 if response.attrib['stat'] != "ok":
-                    raise RuntimeError(f"Unable to image to album: {album.name}, id: {album.photoset_id}")
+                    raise RuntimeError(f"Unable to add {image.filename} to album: {album.name}, id: {album.photoset_id}")
+            except flickrapi.FlickrError as fe:
+                print_clear()
+                logging.error(f"Unable to add {image.filename} to album: {album.name}, id: {album.photoset_id}")
+                logging.error(fe)
+                sys.exit(1)
 
             for group in image.groups:
                 response = self.api.groups_pools_add(group_id=group, photo_id=photo_id)
 
+        try:
             # flickr will bring in hierarchical keywords not under our control as level|level|level
             # which frankly is stupid. Easiest way is to delete them all. We don't know quite what
             # it will have loaded.

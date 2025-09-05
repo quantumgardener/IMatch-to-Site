@@ -7,6 +7,7 @@ import config
 import IMatchAPI as im
 import flickr
 import quantum
+from utilities import print_clear
 
 
 logging.basicConfig(
@@ -93,9 +94,8 @@ if __name__ == "__main__":
             for image_id in images:
                 image = Factory.build_image(image_id, controller)
                 count += 1
-                print(f"{controller.name}: Gathering images from IMatch [{count:3.0f} of {max_images}]", end='\r')
-            print()
-            print(f"{controller.name}: {controller.stats['total']} images gathered from IMatch to action.")
+                print(f"{controller.name}: Gathering images from IMatch [{count:2.0f} of {max_images}]", end='\r')
+            print_clear(f"{controller.name}: {controller.stats['total']} images gathered from IMatch to action")
 
             controller.classify_images()
             controller.add_images()
@@ -106,8 +106,6 @@ if __name__ == "__main__":
         except TypeError as ex:
             print(ex) 
             sys.exit(1)
-
-        print(f"{controller.name}: 0 images gathered from IMatch.")
 
     # stats = {}
     # for controller in platform_controllers:
