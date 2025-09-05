@@ -424,7 +424,75 @@ class FlickrController(PlatformController):
             logging.error(response)
             sys.exit(1)
 
+    def finalise(self):
+        ## Set album order based on alphabetical album order
+        print_clear(f'{self.name}: Finalising -- set album order', end='\r')
+        logging.debug(f"[commit_update] Finalising -- set album order")
+        sorted_ids = [album.photoset_id for album in sorted(self.albums.values(), key=lambda a: a.name)]
+        
+        self.connect() ## If there was no other work to do, we won't have connected
+        try:
+            response = self.api.photosets_orderSets(
+                photoset_ids = ",".join(sorted_ids)
+                ) 
+            if response.attrib['stat'] != "ok":
+                raise RuntimeError(f"Unable to set album sort order")
+        except flickrapi.FlickrError as fe:
+            print_clear()
+            logging.error(f"Unable to set album sort order")
+            logging.error(fe)
+            sys.exit(1)
 
+        print_clear(f'{self.name}: Finalising -- updating album metadata', end='\r')
+        ## Now, set the thumbnail each album, based off the thumbnail set in the iMatch category and update the name and description
+        for album in self.albums.values():
+            category_info = im.IMatchAPI.get_category_info(
+                im.IMatchUtility.build_category([
+                    config.ROOT_CATEGORY,
+                    "albums",
+                    album.name
+                    ]),
+                params={
+                    "fields" : "thumbnail"
+                    }
+                )[0]
+            if category_info['thumbnail'] != 0:
+                # A thumbnail has been set in IMatch, so make sure flickr album matches
+                response = im.IMatchAPI.get_attributes("flickr", category_info['thumbnail'])
+                if len(response) != 0:
+                    # image is on flickr so we can update the thumbnail safely
+                    try:
+                        response = self.api.photosets_setPrimaryPhoto(
+                            photoset_id = album.photoset_id,
+                            photo_id = response[0]['photo_id']
+                            ) 
+                        if response.attrib['stat'] != "ok":
+                            raise RuntimeError(f"Unable to set album thumbnail for {album.name}")
+                    except flickrapi.FlickrError as fe:
+                        print_clear()
+                        logging.error(f"Unable to set album thumbnail for {album.name}")
+                        logging.error(fe)
+                        sys.exit(1)
+            # Confirm name and description
+            try:
+                response = self.api.photosets_editMeta(
+                    photoset_id = album.photoset_id,
+                    title = album.name,
+                    description = album.description
+                    ) 
+                if response.attrib['stat'] != "ok":
+                    raise RuntimeError(f"Unable to set title and description for {album.name}")
+            except flickrapi.FlickrError as fe:
+                print_clear()
+                logging.error(f"Unable to set title and description for {album.name}")
+                logging.error(fe)
+                sys.exit(1)
+
+                    
+
+
+        super().finalise()    
+        print_clear(f'{self.name}: Finalised')
 
 class FlickrAlbum(Album):
     def __init__(self, name, description, photoset_id):
