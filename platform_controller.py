@@ -20,7 +20,6 @@ class PlatformController():
         self.invalid_images = set()
         self.image_references = None #List of images referenced in vault .md files
         self.api = None  # Holds the platform api connection once active
-        self.testing = im.IMatchAPI.get_application_variable("imatch_to_socials_testing") == 1  # = 0 live, 1 = testing
         self.locations = config.locations
         self.albums = album_cls.load()
 
@@ -40,9 +39,6 @@ class PlatformController():
         """Upload and add image to platform"""
         if len(self.images_to_add) == 0:
             return  # Nothing to see here
-        
-        if not self.testing:        
-            self.connect()
 
         start_time = time.time()
         progress_counter = 1
@@ -50,12 +46,6 @@ class PlatformController():
         estimator = ProgressEstimator(total_items=progress_end)
         padding = len(str(progress_end))
         for image in self.images_to_add:
-
-            # # Upload the media, then the status with the media attached. 
-            # if self.testing:
-            #     print(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] **TEST** Adding {image.name} ({image.size/config.MB_SIZE:>6.2f} MB) "{image.title}"')
-            #     progress_counter += 1       
-            #     continue                            
             print_clear(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] Adding {image.name} ({image.size/config.MB_SIZE:0.2f} MB) "{image.title}"  -- est. remaining {estimator.update(progress_counter)}', end='\r')
 
             self.commit_add(image)
@@ -101,9 +91,6 @@ class PlatformController():
         """Delete images from the platform"""
         if len(self.images_to_delete) == 0:
             return  # Nothing to see here
-        
-        if not self.testing:
-            self.connect()
 
         start_time = time.time()
         deleted_images = set()
@@ -112,10 +99,6 @@ class PlatformController():
         estimator = ProgressEstimator(total_items=progress_end)
         padding = len(str(progress_end))
         for image in self.images_to_delete:
-            if self.testing:
-                print(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] **Test** Deleting "{image.title}"')
-                progress_counter += 1       
-                continue    
             print(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] Deleting "{image.name}"  -- est. remaining {estimator.update(progress_counter)}', end="\r")
 
             self.commit_delete(image)
@@ -172,9 +155,6 @@ class PlatformController():
         if len(self.images_to_update) == 0:
             return  # Nothing to see here
         
-        if not self.testing:
-            self.connect()
-
         start_time = time.time()
         progress_counter = 1
         progress_end = len(self.images_to_update)
@@ -186,12 +166,7 @@ class PlatformController():
                 action = "all"
             else:
                 action = "metadata"
-        
-            
-            if self.testing:
-                print(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] **TEST** Updating {action} for {image.name} ({image.size/config.MB_SIZE:5.2f} MB) "{image.title}"')
-                progress_counter += 1       
-                continue
+
             print_clear(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] Updating {action} for {image.name} ({image.size/config.MB_SIZE:0.2f} MB) "{image.title}" -- est. remaining {estimator.update(progress_counter)}', end='\r')
 
             self.commit_update(image)

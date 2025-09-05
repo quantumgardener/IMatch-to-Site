@@ -1,5 +1,7 @@
 from datetime import datetime
 from pprint import pformat, pprint
+import os
+import shutil
 import sys
 import logging
 
@@ -10,7 +12,7 @@ import IMatchAPI as im
 from platform_controller import PlatformController
 from album import Album
 import config
-from utilities import print_clear
+from utilities import print_clear, replace_extension, set_metadata
 
 logging.getLogger("flickrapi.core").setLevel(logging.CRITICAL)  # Hide basic info messages from flickr api
 
@@ -104,6 +106,28 @@ class FlickrController(PlatformController):
         self.upload_format = im.IMatchAPI.FORMAT_JPEG
 
         logging.debug(f'{self.name}: Instance initialised.')
+
+    
+    def add_images(self):
+        # Images loaded from raw jpegs will have private location information in them
+        # We need to split them out and remove that code with exiftool before the
+        # upload. The best way to do this is to avoid uploading originals.
+        # 1. Copy to a temp location and point the filename at this file
+        # 2. Run exiftool over the files
+        # 3. Upload the temp files
+
+        exiftool_tasks = []
+        for image in self.images_to_add:
+            output_file = replace_extension(os.path.join(config.flickr_secrets['tmp_path'], image.name),"jpg")
+            exiftool_tasks.append([image.filename, output_file, image.isPrivate])
+            image.filename = output_file
+
+        print(f'{self.name}: Generating images safe to upload')
+        for task in exiftool_tasks:
+            shutil.copy(task[0], task[1])
+        set_metadata(exiftool_tasks)
+
+        super().add_images()
 
     def classify_images(self):
         super().classify_images()
@@ -425,6 +449,9 @@ class FlickrController(PlatformController):
             sys.exit(1)
 
     def finalise(self):
+        if len(self.images_to_add) + len(self.images_to_delete) + len(self.images_to_update) == 0:
+            return
+        
         ## Set album order based on alphabetical album order
         print_clear(f'{self.name}: Finalising -- set album order', end='\r')
         logging.debug(f"[commit_update] Finalising -- set album order")

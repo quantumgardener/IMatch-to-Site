@@ -5,7 +5,6 @@ import logging
 import os
 from pprint import pprint
 import random
-import subprocess
 import sys
 
 from PIL import Image
@@ -16,6 +15,7 @@ from album import Album
 import IMatchAPI as im
 import config
 import scan_files
+from utilities import set_metadata
 
 SCALING_FACTORS = [
     { "size" : 100, "suffix" : "_t", "format" : "WEBP" },
@@ -26,35 +26,6 @@ SCALING_FACTORS = [
     { "size" : 800, "suffix" : "_c", "format" : "WEBP" },
     { "size" : 1024, "suffix" : "_b", "format" : "WEBP" },
     { "size" : 1600, "suffix" : "_h", "format" : "WEBP" },
-]
-
-exiftool_public_tag_args = [
-    "-xmp:CreateDate",
-    "-xmp-photoshop:DateCreated",
-    "-xmp-dc:Title",
-    "-xmp-dc:Description",
-    "-xmp-xmpRights:All",
-    "-xmp-xmp:Rights",
-    "-xmp-dc:rights",
-    "-XMP-photoshop:Country",
-    "-XMP-photoshop:State",
-    "-XMP-photoshop:City",
-    "-XMP-iptcCore:Location",
-    "-overwrite_original"
-]
-
-exiftool_private_tag_args = [
-    "-xmp:CreateDate",
-    "-xmp-photoshop:DateCreated",
-    "-xmp-dc:Title",
-    "-xmp-dc:Description",
-    "-xmp-xmpRights:All",
-    "-xmp-xmp:Rights",
-    "-xmp-dc:rights",
-    "-XMP-photoshop:Country",
-    "-XMP-photoshop:State",
-    "-XMP-photoshop:City",
-    "-overwrite_original"
 ]
 
 def create_image_version(input_file, output_file, long_edge, format, quality=85):
@@ -72,48 +43,6 @@ def create_image_version(input_file, output_file, long_edge, format, quality=85)
 def prepare_image_versions(args):
     return create_image_version(*args)
 
-
-def set_metadata(exiftool_tasks):
-    with ExifToolSession() as et:    
-        for src, tgt, isPrivate in exiftool_tasks:
-            try:
-                args = exiftool_private_tag_args if isPrivate else exiftool_public_tag_args
-                cmd = ['-TagsFromFile', src] + args + [tgt]
-                response = et.send(cmd)
-                logging.debug(f"[{tgt}] Metadata copied successfully.\n{response.strip()}")
-            except Exception as e:
-                logging.error(f"Failed to copy metadata to {tgt}: {e}")
-
-
-class ExifToolSession:
-    def __enter__(self):
-        self.process = subprocess.Popen(
-            [os.path.normpath(r"C:\Program Files\photools.com\imatch6\exiftool.exe"), '-stay_open', 'True', '-@', '-'],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            universal_newlines=True,
-            bufsize=1
-        )
-        return self
-
-    def send(self, commands):
-        block = '\n'.join(commands) + '\n-execute\n'
-        self.process.stdin.write(block)
-        self.process.stdin.flush()
-
-        output = ''
-        while True:
-            line = self.process.stdout.readline()
-            if line.strip() == '{ready}':
-                break
-            output += line
-        return output
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.process.stdin.write('-stay_open\nFalse\n')
-        self.process.stdin.flush()
-        self.process.terminate()
 
 class QuantumImage(IMatchImage):
         
@@ -322,7 +251,10 @@ class QuantumController(PlatformController):
         }
         logging.debug(f'{self.name}: Instance initialised.')
 
+
     def add_images(self):
+        ## This might be backward. The super call creates the markdown, then the
+        ## image files are processed and added
         super().add_images()
 
         scaling_tasks = []
@@ -365,6 +297,7 @@ class QuantumController(PlatformController):
         if len(self.images_to_delete) > 0:
             pattern = r"\d{6}_[cmntz]\.webp"
             self.image_references = scan_files.scan_folder_with_subfolders(config.quantum_secrets['path'], pattern, {"photos", "albums", ".obsidian"})
+
 
     def connect(self):
         try:
@@ -409,16 +342,20 @@ class QuantumController(PlatformController):
             print(f"An unknown exception occurred in connnecting: {e}")
             sys.exit(1)
 
+
     def finalise(self):
         self.generate_albums()
         super().finalise()       
 
+
     def build_album_path(self, path):
         return os.path.join(self.api[QuantumController._ALBUMS_PATH], path)
-    
+
+
     def build_photo_path(self, path):
         return os.path.join(self.api[QuantumController._PHOTOS_PATH], path)
-    
+
+
     def commit_add(self, image):
         """Make the api call to commit the image to the platform, and update IMatch with reference details"""
         try:
@@ -440,6 +377,7 @@ class QuantumController(PlatformController):
             logging.error(f"{self.name}: An unexpected error occurred: {e}")
             sys.exit()
 
+
     def commit_delete(self, image):
         """Make the api call to delete the image from the platform. We assume the file is not linked anywhere else."""
         try:
@@ -457,6 +395,7 @@ class QuantumController(PlatformController):
         except Exception as e:
             logging.error(f"{self.name}: An unexpected error occurred: {e}")
             sys.exit()
+
 
     def commit_update(self, image):
         """Make the api call to update the image on the platform"""
@@ -477,7 +416,8 @@ class QuantumController(PlatformController):
         except Exception as e:
             logging.error(f"{self.name}: unexpected error occurred: {e}")
             sys.exit()
-    
+
+
     def delete_images(self):
         if len(self.images_to_delete) == 0:
             return  # Nothing to see here
@@ -492,7 +432,8 @@ class QuantumController(PlatformController):
                     print(f"--{referenced_image[0]}")
 
         super().delete_images()
-        
+
+
     def update_images(self):
         super().update_images()
 
