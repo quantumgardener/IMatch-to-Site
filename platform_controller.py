@@ -39,6 +39,8 @@ class PlatformController():
         """Upload and add image to platform"""
         if len(self.images_to_add) == 0:
             return  # Nothing to see here
+        
+        self.connect()
 
         start_time = time.time()
         progress_counter = 1
@@ -79,9 +81,10 @@ class PlatformController():
         """Make the api call to commit the image to the platform, and update IMatch with reference details"""
         raise NotImplementedError("Subclasses must implement this for their specific platform.")
 
-    def commit_delete(self, image):
+    def commit_delete(self, image) -> bool:
         """Make the api call to delete the image from the platform"""
         raise NotImplementedError("Subclasses must implement this for their specific platform.")
+    
     
     def commit_update(self, image):
         """Make the api call to update the image on the platform"""
@@ -91,6 +94,8 @@ class PlatformController():
         """Delete images from the platform"""
         if len(self.images_to_delete) == 0:
             return  # Nothing to see here
+        
+        self.connect()
 
         start_time = time.time()
         deleted_images = set()
@@ -101,21 +106,26 @@ class PlatformController():
         for image in self.images_to_delete:
             print(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] Deleting "{image.name}"  -- est. remaining {estimator.update(progress_counter)}', end="\r")
 
-            self.commit_delete(image)
-            deleted_images.add(image.id)
+            if self.commit_delete(image):
+                deleted_images.add(image.id)
             progress_counter += 1       
 
-        # Unassign all deleted images from the deleted category
-        im.IMatchAPI.unassign_category(
-            im.IMatchUtility.build_category([
-                config.ROOT_CATEGORY,
-                self.name,
-                config.DELETE_CATEGORY
-                ]), 
-            list(deleted_images)
-            )
-        im.IMatchAPI.delete_attributes(self.name,list(deleted_images))
-        print_clear(f"{self.name}: Deleted {progress_counter-1} images in {time.time()-start_time:.2f}s")
+        if len(deleted_images) > 0:
+            # Unassign all deleted images from the deleted category. Those that were not deleted remain.
+            im.IMatchAPI.unassign_category(
+                im.IMatchUtility.build_category([
+                    config.ROOT_CATEGORY,
+                    self.name,
+                    config.DELETE_CATEGORY
+                    ]), 
+                list(deleted_images)
+                )
+            im.IMatchAPI.delete_attributes(self.name,list(deleted_images))
+
+        print_clear(f"{self.name}: Deleted {len(deleted_images)} images in {time.time()-start_time:.2f}s")
+        if len(deleted_images) != len(self.images_to_delete):
+            print_clear(f"{self.name}: Some images not deleted due to presence of faves or comments. Please check '{config.DELETE_CATEGORY}' category")
+
 
     def get_album(self, name):
         try:
@@ -154,6 +164,8 @@ class PlatformController():
         """Update images already on the platform"""
         if len(self.images_to_update) == 0:
             return  # Nothing to see here
+        
+        self.connect()
         
         start_time = time.time()
         progress_counter = 1

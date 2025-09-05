@@ -267,10 +267,51 @@ class FlickrController(PlatformController):
 
                             
     def commit_delete(self, image):
-        """Make the api call to delete the image from the platform"""
-        try:
-            attributes = im.IMatchAPI().get_attributes(self.name, image.id)[0]
-            photo_id = attributes['photo_id']
+        """Make the api call to delete the image from the platform
+        If it has been favourited, or commented, do not delete"""
+
+        # Ok to assume image has attributes. If it did not it would not pass the earlier tests to be in the list
+        # of deletion candidates.
+        attributes = im.IMatchAPI().get_attributes(self.name, image.id)[0]
+        photo_id = attributes['photo_id']
+
+        try:    
+            logging.debug(f"[commit_delete] Checking for commentss {image.name}, {photo_id}")
+            response = self.api.photos.getInfo(
+                photo_id = photo_id,
+                format="parsed-json"
+                )
+            if response['stat'] != "ok":
+                raise RuntimeError(f"[commit_delete] Unable to check for comments {image.name}, {photo_id}")
+        except flickrapi.FlickrError as fe:
+            logging.error(f"[commit_delete] Unable to check for comments {image.name}, {photo_id}")
+            logging.error(fe)
+            logging.error(response)
+            sys.exit(1)
+ 
+        if response['photo']['comments']['_content'] != '0':
+            # Commented image, do not delete
+            return False
+
+        try:    
+            logging.debug(f"[commit_delete] Checking for faves {image.name}, {photo_id}")
+            response = self.api.photos.getFavorites(
+                photo_id = photo_id,
+                format="parsed-json"
+                )
+            if response['stat'] != "ok":
+                raise RuntimeError(f"[commit_delete] Unable to check for faves {image.name}, {photo_id}")
+        except flickrapi.FlickrError as fe:
+            logging.error(f"[commit_delete] Unable to check for faves {image.name}, {photo_id}")
+            logging.error(fe)
+            logging.error(response)
+            sys.exit(1)
+
+        if bool(response.get("photo", {}).get("person")):
+            # Favorited, do not delete
+            return False
+
+        try:    
             logging.debug(f"[commit_delete] Deleting {image.name}, {photo_id}")
             response = self.api.photos.delete(photo_id = photo_id)
             if response.attrib['stat'] != "ok":
@@ -279,6 +320,8 @@ class FlickrController(PlatformController):
             logging.error(fe)
             logging.error(response)
             sys.exit(1)
+
+        return True
 
     def commit_update(self, image):
         """Make the api call to update the image on the platform"""
@@ -457,7 +500,7 @@ class FlickrController(PlatformController):
         logging.debug(f"[commit_update] Finalising -- set album order")
         sorted_ids = [album.photoset_id for album in sorted(self.albums.values(), key=lambda a: a.name)]
         
-        self.connect() ## If there was no other work to do, we won't have connected
+        self.connect() 
         try:
             response = self.api.photosets_orderSets(
                 photoset_ids = ",".join(sorted_ids)
