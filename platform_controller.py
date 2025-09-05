@@ -4,7 +4,7 @@ import IMatchAPI as im
 from imatch_image import IMatchImage
 import config
 from album import Album
-from utilities import print_clear
+from utilities import print_clear, ProgressEstimator
 
 class PlatformController():
 
@@ -47,6 +47,7 @@ class PlatformController():
         start_time = time.time()
         progress_counter = 1
         progress_end = len(self.images_to_add)
+        estimator = ProgressEstimator(total_items=progress_end)
         padding = len(str(progress_end))
         for image in self.images_to_add:
 
@@ -55,7 +56,7 @@ class PlatformController():
             #     print(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] **TEST** Adding {image.name} ({image.size/config.MB_SIZE:>6.2f} MB) "{image.title}"')
             #     progress_counter += 1       
             #     continue                            
-            print_clear(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] Adding {image.name} ({image.size/config.MB_SIZE:0.2f} MB) "{image.title}"', end='\r')
+            print_clear(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] Adding {image.name} ({image.size/config.MB_SIZE:0.2f} MB) "{image.title}"  -- est. remaining {estimator.update(progress_counter)}', end='\r')
 
             self.commit_add(image)
             progress_counter += 1
@@ -108,13 +109,14 @@ class PlatformController():
         deleted_images = set()
         progress_counter = 1
         progress_end = len(self.images_to_delete)
+        estimator = ProgressEstimator(total_items=progress_end)
         padding = len(str(progress_end))
         for image in self.images_to_delete:
             if self.testing:
                 print(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] **Test** Deleting "{image.title}"')
                 progress_counter += 1       
                 continue    
-            print(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] Deleting "{image.title}"  ... {image.name}', end="\r")
+            print(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] Deleting "{image.name}"  -- est. remaining {estimator.update(progress_counter)}', end="\r")
 
             self.commit_delete(image)
             deleted_images.add(image.id)
@@ -176,6 +178,7 @@ class PlatformController():
         start_time = time.time()
         progress_counter = 1
         progress_end = len(self.images_to_update)
+        estimator = ProgressEstimator(total_items=progress_end)
         padding = len(str(progress_end))
         for image in self.images_to_update:
 
@@ -189,7 +192,7 @@ class PlatformController():
                 print(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] **TEST** Updating {action} for {image.name} ({image.size/config.MB_SIZE:5.2f} MB) "{image.title}"')
                 progress_counter += 1       
                 continue
-            print_clear(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] Updating {action} for {image.name} ({image.size/config.MB_SIZE:0.2f} MB) "{image.title}"', end='\r')
+            print_clear(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] Updating {action} for {image.name} ({image.size/config.MB_SIZE:0.2f} MB) "{image.title}" -- est. remaining {estimator.update(progress_counter)}', end='\r')
 
             self.commit_update(image)
 
