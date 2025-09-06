@@ -60,10 +60,8 @@ class FlickrImage(IMatchImage):
                         # Need to grab any albums and groups
                         try:
                             if splits[2] == "albums":
-                                # Code is in the description
                                 self.albums.append(category['description'])
                             if splits[2] == "groups":
-                                # Code is in the description due to the presence of @ being illegal in the name
                                 self.groups.append(category['description'])
                         except IndexError:
                             pass #no groups or albums found
@@ -226,27 +224,29 @@ class FlickrController(PlatformController):
                 response = self.api.groups_pools_add(group_id=group, photo_id=photo_id)
 
         try:
-            # flickr will bring in hierarchical keywords not under our control as level|level|level
-            # which frankly is stupid. Easiest way is to delete them all. We don't know quite what
-            # it will have loaded.
-            logging.debug("[commit_add] Pulling down image tag info")
-            response = self.api.photos.getInfo(
-                photo_id = photo_id,
-                format="parsed-json"
-                )
-            if response['stat'] != "ok":
-                raise RuntimeError(f"Error accessing getInfo")
-            logging.debug("[commit_add] Image tag info\n%s:", pformat(response['photo']['tags']))
+            # ## CODE NOT REQUIRED
+            # ## Hierachical tags not in upload images
+            #  # flickr will bring in hierarchical keywords not under our control as level|level|level
+            # # which frankly is stupid. Easiest way is to delete them all. We don't know quite what
+            # # it will have loaded.
+            # logging.debug("[commit_add] Pulling down image tag info")
+            # response = self.api.photos.getInfo(
+            #     photo_id = photo_id,
+            #     format="parsed-json"
+            #     )
+            # if response['stat'] != "ok":
+            #     raise RuntimeError(f"Error accessing getInfo")
+            # logging.debug("[commit_add] Image tag info\n%s:", pformat(response['photo']['tags']))
 
-            for tag in response['photo']['tags']['tag']:
-                for keyword in image.hierarchical_keywords:
-                    if tag['raw'] == keyword:
-                        logging.debug(f"[commit_add] Removing tag {tag['id']}")
-                        response = self.api.photos.removeTag(tag_id=tag['id'])               
-                        if response.attrib['stat'] != "ok":
-                            raise RuntimeError(f"Error removing tag {tag['id']}")
+            # for tag in response['photo']['tags']['tag']:
+            #     for keyword in image.hierarchical_keywords:
+            #         if tag['raw'] == keyword:
+            #             logging.debug(f"[commit_add] Removing tag {tag['id']}")
+            #             response = self.api.photos.removeTag(tag_id=tag['id'])               
+            #             if response.attrib['stat'] != "ok":
+            #                 raise RuntimeError(f"Error removing tag {tag['id']}")
             
-            # Now add back the "Approved" tags. If added on upload, they combine with IPTC weirdly
+            # Add flat keywords
             response = self.api.photos.addTags(
                 tags=",".join(image.flat_keywords), 
                 photo_id=photo_id)

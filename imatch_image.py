@@ -129,6 +129,16 @@ class IMatchImage():
         except AttributeError:
             logging.error("hierarchical keywords missing on image but image has been marked valid.")
 
+        if len(self.location) > 0 and self.isPublic: 
+            for sublocation in self.location.split(", "):
+                self.add_flat_keyword(sublocation)
+        if len(self.city) > 0 and self.isPublic:
+            self.add_flat_keyword(self.city)
+        if len(self.state) > 0:
+            self.add_flat_keyword(self.state)
+        if len(self.country) > 0:
+            self.add_flat_keyword(self.country)
+
         # Add certain categories as keywords
         logging.debug("Processing base categories")
         for categories in self.categories:
