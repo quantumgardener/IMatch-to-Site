@@ -119,7 +119,7 @@ class FlickrController(PlatformController):
             exiftool_tasks.append([image.filename, output_file, image.isPrivate])
             image.filename = output_file
 
-        print(f'{self.name}: Generating images safe to upload')
+        print(f'{self.name}: Generating images safe to add')
         for task in exiftool_tasks:
             shutil.copy(task[0], task[1])
         set_metadata(exiftool_tasks)
@@ -570,6 +570,27 @@ class FlickrController(PlatformController):
 
         super().finalise()  
         print_clear(f'{self.name}: Finalised')
+
+    def update_images(self):
+        # Images loaded from raw jpegs will have private location information in them
+        # We need to split them out and remove that code with exiftool before the
+        # upload. The best way to do this is to avoid uploading originals.
+        # 1. Copy to a temp location and point the filename at this file
+        # 2. Run exiftool over the files
+        # 3. Upload the temp files
+
+        exiftool_tasks = []
+        for image in self.images_to_update:
+            output_file = replace_extension(os.path.join(config.flickr_secrets['tmp_path'], image.name),"jpg")
+            exiftool_tasks.append([image.filename, output_file, image.isPrivate])
+            image.filename = output_file
+
+        print(f'{self.name}: Generating images safe to update')
+        for task in exiftool_tasks:
+            shutil.copy(task[0], task[1])
+        set_metadata(exiftool_tasks)
+
+        super().update_images()
 
 class FlickrAlbum(Album):
     def __init__(self, name, description, photoset_id):
