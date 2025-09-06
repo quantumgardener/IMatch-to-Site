@@ -27,6 +27,8 @@
             <p>An external Python script is called to execute the changes. Script location: <code id="script_path"></code></p>
             <br/>
             <button id="btn-all" class="btn btn-default">Run</button>
+            <button id="btn-flickr" class="btn btn-default">Run <strong>flickr only</strong></button>
+            <button id="btn-quantum" class="btn btn-default">Run <strong>quantum only</strong></button>
             <!-- In these pre's we display the server response and data as needed -->
             <h3>Script Response <i id="animation" class="fa fa-circle-o-notch fa-spin fa-fw text-muted" style="display:none"></i></h3>
             <pre id="result"></pre>
@@ -52,6 +54,14 @@
 
                 $('#btn-all').click(function() {
                     call_python(script_path, "")
+                });
+
+                $('#btn-flickr').click(function() {
+                    call_python(script_path, "flickr")
+                });
+
+                $('#btn-quantum').click(function() {
+                    call_python(script_path, "quantum")
                 });
 
 
