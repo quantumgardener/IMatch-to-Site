@@ -1,3 +1,4 @@
+import logging
 import time
 
 import IMatchAPI as im
@@ -124,7 +125,7 @@ class PlatformController():
 
         print_clear(f"{self.name}: Deleted {len(deleted_images)} images in {time.time()-start_time:.2f}s")
         if len(deleted_images) != len(self.images_to_delete):
-            print_clear(f"{self.name}: Some images not deleted due to presence of faves or comments. Please check '{config.DELETE_CATEGORY}' category")
+            print_clear(f"{self.name}: Some images not deleted due to presence of faves or comments. Please check '{config.ERROR_CATEGORY}' category")
 
 
     def get_album(self, name):
@@ -147,7 +148,14 @@ class PlatformController():
             print(f"{self.name}: Images with errors detected and assigned to '{config.ROOT_CATEGORY}|{self.name}' error categories.")
             for image in sorted(self.invalid_images, key=lambda x: x.name):
                 for error in image.errors:
-                    im.IMatchAPI().assign_category("|".join([config.ROOT_CATEGORY,self.name,config.ERROR_CATEGORY,error]), image.id)
+                    print(error)
+                    im.IMatchAPI().assign_category(
+                        im.IMatchUtility.build_category([
+                            config.ROOT_CATEGORY,
+                            self.name,
+                            config.ERROR_CATEGORY,error
+                        ])
+                        , image.id)
 
     def finalise(self):
         self.process_errors()

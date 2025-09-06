@@ -51,7 +51,6 @@ class QuantumImage(IMatchImage):
 
     def __init__(self, id, platform) -> None:
         super().__init__(id, platform)
-        self.albums = []
         self.templates = {
             QuantumImage._PHOTO_TEMPLATE : None,
             QuantumImage._MAP_TEMPLATE : None,

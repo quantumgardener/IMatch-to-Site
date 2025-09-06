@@ -164,7 +164,7 @@ class IMatchImage():
                         self.operation = IMatchImage.OP_DELETE
         else:
             self.operation = IMatchImage.OP_INVALID
-
+            
     def __repr__(self) -> str:
         return vars(self)
 

@@ -22,7 +22,6 @@ class FlickrImage(IMatchImage):
 
     def __init__(self, id, platform) -> None:
         super().__init__(id, platform)
-        self.albums = set()
         self.groups = set()
 
         if self.size > FlickrImage.__MAX_SIZE:
@@ -276,7 +275,7 @@ class FlickrController(PlatformController):
         photo_id = attributes['photo_id']
 
         try:    
-            logging.debug(f"[commit_delete] Checking for commentss {image.name}, {photo_id}")
+            logging.debug(f"[commit_delete] Checking for comments {image.name}, {photo_id}")
             response = self.api.photos.getInfo(
                 photo_id = photo_id,
                 format="parsed-json"
@@ -291,6 +290,8 @@ class FlickrController(PlatformController):
  
         if response['photo']['comments']['_content'] != '0':
             # Commented image, do not delete
+            image.errors.append("commented file")
+            self.invalid_images.add(image)
             return False
 
         try:    
@@ -309,6 +310,8 @@ class FlickrController(PlatformController):
 
         if bool(response.get("photo", {}).get("person")):
             # Favorited, do not delete
+            image.errors.append("faved file")
+            self.controller.invalid_images.add(image)
             return False
 
         try:    
@@ -320,6 +323,13 @@ class FlickrController(PlatformController):
             logging.error(fe)
             logging.error(response)
             sys.exit(1)
+
+        try:
+            output_file = replace_extension(os.path.join(config.flickr_secrets['tmp_path'], image.name),"jpg")
+            os.remove(output_file)
+        except:
+            # Temp folder, don't really care if it fails
+            pass
 
         return True
 
@@ -492,76 +502,73 @@ class FlickrController(PlatformController):
             sys.exit(1)
 
     def finalise(self):
-        if len(self.images_to_add) + len(self.images_to_delete) + len(self.images_to_update) == 0:
-            return
-        
-        ## Set album order based on alphabetical album order
-        print_clear(f'{self.name}: Finalising -- set album order', end='\r')
-        logging.debug(f"[commit_update] Finalising -- set album order")
-        sorted_ids = [album.photoset_id for album in sorted(self.albums.values(), key=lambda a: a.name)]
-        
-        self.connect() 
-        try:
-            response = self.api.photosets_orderSets(
-                photoset_ids = ",".join(sorted_ids)
-                ) 
-            if response.attrib['stat'] != "ok":
-                raise RuntimeError(f"Unable to set album sort order")
-        except flickrapi.FlickrError as fe:
-            print_clear()
-            logging.error(f"Unable to set album sort order")
-            logging.error(fe)
-            sys.exit(1)
-
-        print_clear(f'{self.name}: Finalising -- updating album metadata', end='\r')
-        ## Now, set the thumbnail each album, based off the thumbnail set in the iMatch category and update the name and description
-        for album in self.albums.values():
-            category_info = im.IMatchAPI.get_category_info(
-                im.IMatchUtility.build_category([
-                    config.ROOT_CATEGORY,
-                    "albums",
-                    album.name
-                    ]),
-                params={
-                    "fields" : "thumbnail"
-                    }
-                )[0]
-            if category_info['thumbnail'] != 0:
-                # A thumbnail has been set in IMatch, so make sure flickr album matches
-                response = im.IMatchAPI.get_attributes("flickr", category_info['thumbnail'])
-                if len(response) != 0:
-                    # image is on flickr so we can update the thumbnail safely
-                    try:
-                        response = self.api.photosets_setPrimaryPhoto(
-                            photoset_id = album.photoset_id,
-                            photo_id = response[0]['photo_id']
-                            ) 
-                        if response.attrib['stat'] != "ok":
-                            raise RuntimeError(f"Unable to set album thumbnail for {album.name}")
-                    except flickrapi.FlickrError as fe:
-                        print_clear()
-                        logging.error(f"Unable to set album thumbnail for {album.name}")
-                        logging.error(fe)
-                        sys.exit(1)
-            # Confirm name and description
+        if len(self.images_to_add) + len(self.images_to_delete) + len(self.images_to_update) != 0:
+            
+            
+            ## Set album order based on alphabetical album order
+            print_clear(f'{self.name}: Finalising -- set album order', end='\r')
+            logging.debug(f"[commit_update] Finalising -- set album order")
+            sorted_ids = [album.photoset_id for album in sorted(self.albums.values(), key=lambda a: a.name)]
+            
+            self.connect() 
             try:
-                response = self.api.photosets_editMeta(
-                    photoset_id = album.photoset_id,
-                    title = album.name,
-                    description = album.description
+                response = self.api.photosets_orderSets(
+                    photoset_ids = ",".join(sorted_ids)
                     ) 
                 if response.attrib['stat'] != "ok":
-                    raise RuntimeError(f"Unable to set title and description for {album.name}")
+                    raise RuntimeError(f"Unable to set album sort order")
             except flickrapi.FlickrError as fe:
                 print_clear()
-                logging.error(f"Unable to set title and description for {album.name}")
+                logging.error(f"Unable to set album sort order")
                 logging.error(fe)
                 sys.exit(1)
 
-                    
+            print_clear(f'{self.name}: Finalising -- updating album metadata', end='\r')
+            ## Now, set the thumbnail each album, based off the thumbnail set in the iMatch category and update the name and description
+            for album in self.albums.values():
+                category_info = im.IMatchAPI.get_category_info(
+                    im.IMatchUtility.build_category([
+                        config.ROOT_CATEGORY,
+                        "albums",
+                        album.name
+                        ]),
+                    params={
+                        "fields" : "thumbnail"
+                        }
+                    )[0]
+                if category_info['thumbnail'] != 0:
+                    # A thumbnail has been set in IMatch, so make sure flickr album matches
+                    response = im.IMatchAPI.get_attributes("flickr", category_info['thumbnail'])
+                    if len(response) != 0:
+                        # image is on flickr so we can update the thumbnail safely
+                        try:
+                            response = self.api.photosets_setPrimaryPhoto(
+                                photoset_id = album.photoset_id,
+                                photo_id = response[0]['photo_id']
+                                ) 
+                            if response.attrib['stat'] != "ok":
+                                raise RuntimeError(f"Unable to set album thumbnail for {album.name}")
+                        except flickrapi.FlickrError as fe:
+                            print_clear()
+                            logging.error(f"Unable to set album thumbnail for {album.name}")
+                            logging.error(fe)
+                            sys.exit(1)
+                # Confirm name and description
+                try:
+                    response = self.api.photosets_editMeta(
+                        photoset_id = album.photoset_id,
+                        title = album.name,
+                        description = album.description
+                        ) 
+                    if response.attrib['stat'] != "ok":
+                        raise RuntimeError(f"Unable to set title and description for {album.name}")
+                except flickrapi.FlickrError as fe:
+                    print_clear()
+                    logging.error(f"Unable to set title and description for {album.name}")
+                    logging.error(fe)
+                    sys.exit(1)
 
-
-        super().finalise()    
+        super().finalise()  
         print_clear(f'{self.name}: Finalised')
 
 class FlickrAlbum(Album):
