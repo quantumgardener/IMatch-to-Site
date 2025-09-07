@@ -8,6 +8,8 @@ import threading
 import time
 from tqdm import tqdm
 
+import config
+
 ## Clear the full length of any line so that if the new text is shorter
 ## there are no issues
 def clear_line():
@@ -88,9 +90,9 @@ exiftool_private_tag_args = [
 
 def set_metadata(exiftool_tasks, controller_name):
     with ExifToolSession() as et:
-        for src, tgt, isPrivate in (pbar := tqdm(exiftool_tasks)):
+        for src, tgt, isPrivate in (pbar := tqdm(exiftool_tasks, bar_format=config.bar_format)):
             try:
-                pbar.set_description(f"{controller_name}: copying metadata")
+                pbar.set_description(f"{controller_name}: Copying metadata")
                 args = exiftool_private_tag_args if isPrivate else exiftool_public_tag_args
                 cmd = ['-all=', '-overwrite_original' '-TagsFromFile', src] + args + [tgt]
                 response = et.send(cmd)

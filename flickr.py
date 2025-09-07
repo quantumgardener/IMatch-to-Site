@@ -120,9 +120,10 @@ class FlickrController(PlatformController):
             exiftool_tasks.append([image.filename, output_file, image.isPrivate])
             image.filename = output_file
 
-        for task in tqdm(exiftool_tasks, f"{self.name}: copying files to add", bar_format=config.bar_format):
-            shutil.copy(task[0], task[1])
-        set_metadata(exiftool_tasks, self.name)
+        if len(exiftool_tasks) > 0:
+            for task in tqdm(exiftool_tasks, f"{self.name}: Copying files to add", bar_format=config.bar_format):
+                shutil.copy(task[0], task[1])
+            set_metadata(exiftool_tasks, self.name)
 
         super().add_images()
 
@@ -151,7 +152,7 @@ class FlickrController(PlatformController):
             return
         else: 
             try:
-                print(f"{self.name}: Work to do -- Connecting to platform.")
+                print(f"{self.name}: Work to do -- connecting to platform.", end="\r")
                 flickr = flickrapi.FlickrAPI(
                     config.flickr_secrets["api_key"],
                     config.flickr_secrets["api_secret"],
@@ -160,7 +161,7 @@ class FlickrController(PlatformController):
                 flickr.authenticate_via_browser(
                     perms = 'delete'
                     )
-                print(f"{self.name}: Authenticated.")
+                print(f"{self.name}: Work to do -- authenticated")
             except Exception as ex:
                 logging.error(f"{self.name}: {ex}")
                 sys.exit()
@@ -504,7 +505,6 @@ class FlickrController(PlatformController):
     def finalise(self):
         if len(self.images_to_add) + len(self.images_to_delete) + len(self.images_to_update) != 0:
             
-            
             ## Set album order based on alphabetical album order
             print_clear(f'{self.name}: Finalising -- set album order', end='\r')
             logging.debug(f"[commit_update] Finalising -- set album order")
@@ -523,9 +523,8 @@ class FlickrController(PlatformController):
                 logging.error(fe)
                 sys.exit(1)
 
-            print_clear(f'{self.name}: Finalising -- updating album metadata', end='\r')
             ## Now, set the thumbnail each album, based off the thumbnail set in the iMatch category and update the name and description
-            for album in self.albums.values():
+            for album in tqdm(self.albums.values(), bar_format=config.bar_format, desc=f"{self.name}: Update album metadata"):
                 category_info = im.IMatchAPI.get_category_info(
                     im.IMatchUtility.build_category([
                         config.ROOT_CATEGORY,
@@ -585,10 +584,10 @@ class FlickrController(PlatformController):
             exiftool_tasks.append([image.filename, output_file, image.isPrivate])
             image.filename = output_file
 
-        for task in tqdm(exiftool_tasks, f"{self.name}: copying files to update", bar_format=config.bar_format):
-            shutil.copy(task[0], task[1])
-        set_metadata(exiftool_tasks, self.name)
-
+        if len(exiftool_tasks) > 0:
+            for task in tqdm(exiftool_tasks, f"{self.name}: Copying files to update", bar_format=config.bar_format):
+                shutil.copy(task[0], task[1])
+            set_metadata(exiftool_tasks, self.name)
         super().update_images()
 
 class FlickrAlbum(Album):
