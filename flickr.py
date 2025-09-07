@@ -4,6 +4,7 @@ import os
 import shutil
 import sys
 import logging
+from tqdm import tqdm
 
 import flickrapi
 
@@ -119,10 +120,9 @@ class FlickrController(PlatformController):
             exiftool_tasks.append([image.filename, output_file, image.isPrivate])
             image.filename = output_file
 
-        print(f'{self.name}: Generating images safe to add')
-        for task in exiftool_tasks:
+        for task in tqdm(exiftool_tasks, f"{self.name}: copying files to add", bar_format=config.bar_format):
             shutil.copy(task[0], task[1])
-        set_metadata(exiftool_tasks)
+        set_metadata(exiftool_tasks, self.name)
 
         super().add_images()
 
@@ -585,10 +585,9 @@ class FlickrController(PlatformController):
             exiftool_tasks.append([image.filename, output_file, image.isPrivate])
             image.filename = output_file
 
-        print(f'{self.name}: Generating images safe to update')
-        for task in exiftool_tasks:
+        for task in tqdm(exiftool_tasks, f"{self.name}: copying files to update", bar_format=config.bar_format):
             shutil.copy(task[0], task[1])
-        set_metadata(exiftool_tasks)
+        set_metadata(exiftool_tasks, self.name)
 
         super().update_images()
 

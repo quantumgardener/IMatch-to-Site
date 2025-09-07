@@ -1,11 +1,11 @@
 import logging
-import time
+from tqdm import tqdm
 
 import IMatchAPI as im
 from imatch_image import IMatchImage
 import config
 from album import Album
-from utilities import print_clear, ProgressEstimator
+from utilities import print_clear
 
 class PlatformController():
 
@@ -43,19 +43,11 @@ class PlatformController():
         
         self.connect()
 
-        start_time = time.time()
-        progress_counter = 1
-        progress_end = len(self.images_to_add)
-        estimator = ProgressEstimator(total_items=progress_end)
-        padding = len(str(progress_end))
-        for image in self.images_to_add:
-            print_clear(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] Adding {image.name} ({image.size/config.MB_SIZE:0.2f} MB) "{image.title}"  -- est. remaining {estimator.update(progress_counter)}', end='\r')
-
+        for image in (pbar := tqdm(self.images_to_add, bar_format=config.bar_format)):
+            pbar.set_description(f'{self.name}: Adding {image.name}')
+        
             self.commit_add(image)
-            progress_counter += 1
-
-        print_clear(f"{self.name}: Added {progress_counter-1} images in {time.time()-start_time:.2f}s")
-
+        
     def classify_images(self):
         count = 0
         for image in self.images:
@@ -98,18 +90,12 @@ class PlatformController():
         
         self.connect()
 
-        start_time = time.time()
         deleted_images = set()
-        progress_counter = 1
-        progress_end = len(self.images_to_delete)
-        estimator = ProgressEstimator(total_items=progress_end)
-        padding = len(str(progress_end))
-        for image in self.images_to_delete:
-            print(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] Deleting "{image.name}"  -- est. remaining {estimator.update(progress_counter)}', end="\r")
-
+        for image in (pbar := tqdm(self.images_to_delete, bar_format=config.bar_format)):
+            pbar.set_description(f'{self.name}: Delete {image.name}')
+            
             if self.commit_delete(image):
                 deleted_images.add(image.id)
-            progress_counter += 1       
 
         if len(deleted_images) > 0:
             # Unassign all deleted images from the deleted category. Those that were not deleted remain.
@@ -123,7 +109,6 @@ class PlatformController():
                 )
             im.IMatchAPI.delete_attributes(self.name,list(deleted_images))
 
-        print_clear(f"{self.name}: Deleted {len(deleted_images)} images in {time.time()-start_time:.2f}s")
         if len(deleted_images) != len(self.images_to_delete):
             print_clear(f"{self.name}: Some images not deleted due to presence of faves or comments. Please check '{config.ERROR_CATEGORY}' category")
 
@@ -175,19 +160,8 @@ class PlatformController():
         
         self.connect()
         
-        start_time = time.time()
-        progress_counter = 1
-        progress_end = len(self.images_to_update)
-        estimator = ProgressEstimator(total_items=progress_end)
-        padding = len(str(progress_end))
-        for image in self.images_to_update:
-
-            if image.operation == IMatchImage.OP_UPDATE:
-                action = "all"
-            else:
-                action = "metadata"
-
-            print_clear(f'{self.name}: [{progress_counter:0{padding}}/{progress_end:0{padding}}] Updating {action} for {image.name} ({image.size/config.MB_SIZE:0.2f} MB) "{image.title}" -- est. remaining {estimator.update(progress_counter)}', end='\r')
+        for image in (pbar := tqdm(self.images_to_update, bar_format=config.bar_format)):
+            pbar.set_description(f'{self.name}: Update {image.name}')
 
             self.commit_update(image)
 
@@ -210,11 +184,7 @@ class PlatformController():
                         ]), 
                     image.id
                     )     
-
-            progress_counter += 1
         
-        print_clear(f"{self.name}: Updated {progress_counter-1} images in {time.time()-start_time:.2f}s")
-
     @property
     def stats(self):
         return {

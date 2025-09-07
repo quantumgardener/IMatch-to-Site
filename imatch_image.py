@@ -125,7 +125,19 @@ class IMatchImage():
         try:
             for keyword in self.hierarchical_keywords:
                 for k in keyword.split("|"):
-                    self.add_flat_keyword(k) 
+                    if k not in [
+                        'activity',
+                        'condition',
+                        'function',
+                        'genre',
+                        'landform',
+                        'period',
+                        'season',
+                        'technique',
+                        'time of day',
+                        'type'
+                    ]:
+                        self.add_flat_keyword(k)
         except AttributeError:
             logging.error("hierarchical keywords missing on image but image has been marked valid.")
 
@@ -134,24 +146,10 @@ class IMatchImage():
                 self.add_flat_keyword(sublocation)
         if len(self.city) > 0 and self.isPublic:
             self.add_flat_keyword(self.city)
-        if len(self.state) > 0:
-            self.add_flat_keyword(self.state)
-        if len(self.country) > 0:
-            self.add_flat_keyword(self.country)
-
-        # Add certain categories as keywords
-        logging.debug("Processing base categories")
-        for categories in self.categories:
-            splits = categories['path'].split("|")
-            logging.debug(splits)
-            match splits[0]:
-                case 'Image Characteristics':
-                    match splits[1]:
-                        case "Genre":
-                            # Genre is tagged with itself and with "photography appended"
-                            for genre in splits[2:]:
-                                self.flat_keywords.add(genre)
-                                logging.debug(f'Added {genre} genre to keywords')
+        # if len(self.state) > 0:
+        #     self.add_flat_keyword(self.state)
+        # if len(self.country) > 0:
+        #     self.add_flat_keyword(self.country)
 
     def _set_operations(self):
         # Set the operation for this file.
@@ -287,16 +285,16 @@ class IMatchImage():
                         self.errors.append(f"missing {attribute}")
             except AttributeError as e:
                 self.errors.append(f"missing {attribute}")
-        genre_ok = False
-        try:
-            for categories in self.categories:
-                splits = categories['path'].split("|")
-                if splits[0] == "Image Characteristics" and splits[1] == "Genre":
-                    genre_ok = True
-        except AttributeError:
-            self.errors.append(f"no keywords")
-        if not genre_ok:
-            self.errors.append(f"missing genre")
+        # genre_ok = False
+        # try:
+        #     for categories in self.categories:
+        #         splits = categories['path'].split("|")
+        #         if splits[0] == "Image Characteristics" and splits[1] == "Genre":
+        #             genre_ok = True
+        # except AttributeError:
+        #     self.errors.append(f"no keywords")
+        # if not genre_ok:
+        #     self.errors.append(f"missing genre")
         if self.format not in self.controller.allowed_formats:
             self.errors.append("invalid format")
         return len(self.errors) == 0

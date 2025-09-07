@@ -4,7 +4,9 @@ import logging
 import os
 import subprocess
 import sys
+import threading
 import time
+from tqdm import tqdm
 
 ## Clear the full length of any line so that if the new text is shorter
 ## there are no issues
@@ -17,27 +19,6 @@ def clear_line():
 def print_clear(text='', end="\n"):
     clear_line()
     print(text, end=end)
-
-
-## Provide a timed estimate of progress
-class ProgressEstimator:
-    def __init__(self, total_items):
-        self.total_items = total_items
-        self.start_time = time.time()
-        self.last_update = self.start_time
-
-    def update(self, current_count):
-        now = time.time()
-        elapsed = now - self.start_time
-
-        if current_count == 0:
-            return "Waiting for progress..."
-
-        avg_time_per_item = elapsed / current_count
-        remaining_items = self.total_items - current_count
-        estimated_remaining = avg_time_per_item * remaining_items
-
-        return str(timedelta(seconds=int(estimated_remaining)))
 
 
 ## Replace filename extension
@@ -105,20 +86,14 @@ exiftool_private_tag_args = [
     "-overwrite_original"
 ]
 
-def set_metadata(exiftool_tasks):
-    with ExifToolSession() as et:    
-        for src, tgt, isPrivate in exiftool_tasks:
+def set_metadata(exiftool_tasks, controller_name):
+    with ExifToolSession() as et:
+        for src, tgt, isPrivate in (pbar := tqdm(exiftool_tasks)):
             try:
-                # Sanitize first
-                cmd = ['-all=', '-overwrite_original', tgt]
-                response = et.send(cmd) 
-
-                # Copy metadata second
+                pbar.set_description(f"{controller_name}: copying metadata")
                 args = exiftool_private_tag_args if isPrivate else exiftool_public_tag_args
-                cmd = ['-TagsFromFile', src] + args + [tgt]
+                cmd = ['-all=', '-overwrite_original' '-TagsFromFile', src] + args + [tgt]
                 response = et.send(cmd)
-
-                logging.debug(f"[{tgt}] Metadata copied successfully.\n{response.strip()}")
             except Exception as e:
                 logging.error(f"Failed to copy metadata to {tgt}: {e}")
 
@@ -126,22 +101,31 @@ def set_metadata(exiftool_tasks):
 class ExifToolSession:
     def __enter__(self):
         self.process = subprocess.Popen(
-            [os.path.normpath(r"C:\Program Files\photools.com\imatch6\exiftool.exe"), '-stay_open', 'True', '-@', '-'],
+            [r"C:\Program Files\photools.com\imatch6\exiftool.exe", '-stay_open', 'True', '-@', '-'],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             universal_newlines=True,
             bufsize=1
         )
+        threading.Thread(target=self._drain_stderr, daemon=True).start()
         return self
 
-    def send(self, commands):
+    def _drain_stderr(self):
+        for line in iter(self.process.stderr.readline, ''):
+            # logging.warning(f"[ExifTool stderr] {line.strip()}")
+            pass
+
+    def send(self, commands, timeout=15):
         block = '\n'.join(commands) + '\n-execute\n'
         self.process.stdin.write(block)
         self.process.stdin.flush()
 
         output = ''
+        start = time.time()
         while True:
+            if time.time() - start > timeout:
+                raise TimeoutError("ExifTool response timed out.")
             line = self.process.stdout.readline()
             if line.strip() == '{ready}':
                 break
@@ -152,3 +136,4 @@ class ExifToolSession:
         self.process.stdin.write('-stay_open\nFalse\n')
         self.process.stdin.flush()
         self.process.terminate()
+

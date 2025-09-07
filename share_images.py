@@ -2,6 +2,7 @@ import sys
 import logging
 import pprint
 import time
+from tqdm import tqdm
 
 import config
 import IMatchAPI as im
@@ -91,11 +92,9 @@ if __name__ == "__main__":
         count = 0
         max_images = len(images)
         try:
-            for image_id in images:
+            for image_id in tqdm(images, desc=f"{controller.name}: Gathering images from IMatch", bar_format=config.bar_format):
                 image = Factory.build_image(image_id, controller)
                 count += 1
-                print(f"{controller.name}: Gathering images from IMatch [{count:2.0f} of {max_images}]", end='\r')
-            print_clear(f"{controller.name}: {controller.stats['total']} images gathered from IMatch to action")
 
             controller.classify_images()
             controller.add_images()
