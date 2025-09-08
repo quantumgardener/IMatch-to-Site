@@ -94,7 +94,7 @@ def set_metadata(exiftool_tasks, controller_name):
             try:
                 pbar.set_description(f"{controller_name}: Copying metadata")
                 args = exiftool_private_tag_args if isPrivate else exiftool_public_tag_args
-                cmd = ['-all=', '-overwrite_original' '-TagsFromFile', src] + args + [tgt]
+                cmd = ['-all=', '-overwrite_original', '-TagsFromFile', src] + args + [tgt]
                 response = et.send(cmd)
             except Exception as e:
                 logging.error(f"Failed to copy metadata to {tgt}: {e}")
@@ -115,8 +115,8 @@ class ExifToolSession:
 
     def _drain_stderr(self):
         for line in iter(self.process.stderr.readline, ''):
-            # logging.warning(f"[ExifTool stderr] {line.strip()}")
-            pass
+            logging.warning(f"[ExifTool stderr] {line.strip()}")
+
 
     def send(self, commands, timeout=15):
         block = '\n'.join(commands) + '\n-execute\n'
