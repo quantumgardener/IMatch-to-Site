@@ -1,6 +1,7 @@
 from datetime import datetime
 from pprint import pformat, pprint
 import os
+import re
 import shutil
 import sys
 import logging
@@ -362,13 +363,54 @@ class FlickrController(PlatformController):
             if image.operation == IMatchImage.OP_UPDATE:
                 # Update image alongside metadata
                 logging.debug(f"[commit_update] Replacing image for {photo_id}")
-                response = self.api.replace(
-                    filename = image.filename, 
-                    photo_id = photo_id
+                try:
+                    response = self.api.replace(
+                        filename = image.filename, 
+                        photo_id = photo_id
+                        )
+                    if response.attrib['stat'] != "ok":
+                        raise RuntimeError("Unable to replace image file")
+                except flickrapi.FlickrError as fe:
+                    logging.error(fe)
+                    logging.error(response)
+                    sys.exit(1)
+                
+                # We updated so the secret component of any images linked externally will change.
+                try:
+                    response = self.api.photos_getSizes(
+                        photo_id = photo_id,
+                        format = "parsed-json"
                     )
-                if response.attrib['stat'] != "ok":
-                    raise RuntimeError("Unable to replace image file")
+                    if response['stat'] != "ok":
+                        raise RuntimeError("Unable to access sizes")
+                except flickrapi.FlickrError as fe:
+                    logging.error(fe)
+                    logging.error(response)
+                    sys.exit(1)
 
+                new_url = None
+                for size in response['sizes']['size']:
+                    if size['label'] == "Medium 800":
+                        new_url = size['source']
+                if not new_url:
+                    raise ValueError(f"Size 'c' not found for {photo_id}")
+                    
+                flickr_pattern = flickr_pattern = re.compile(
+                    rf'https://live\.staticflickr\.com/\d+/{photo_id}_[a-zA-Z0-9]+(?:_[a-z])?\.jpg'
+                )
+                for root, _, files in tqdm(os.walk(config.quantum_secrets['path']), desc="Updating website links"):
+                    for file in files:
+                        if file.endswith('.md'):
+                            file_path = os.path.join(root, file)
+                            with open(file_path, 'r', encoding="utf-8") as f:
+                                content = f.read()
+
+                            updated_content = flickr_pattern.sub(new_url, content)
+
+                            if content != updated_content:
+                                with open(file_path, 'w', encoding='utf-8') as f:
+                                    f.write(updated_content)
+                
             logging.debug(f"[commit_update] Setting dates for {photo_id}")
             response = self.api.photos.setDates(
                 photo_id=photo_id, 
