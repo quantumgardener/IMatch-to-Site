@@ -152,7 +152,7 @@ class FlickrController(PlatformController):
             return
         else: 
             try:
-                print(f"{self.name}: Work to do -- connecting to platform.", end="\r")
+                print(f"{self.name}: Work to do -- connecting to platform", end="\r")
                 flickr = flickrapi.FlickrAPI(
                     config.flickr_secrets["api_key"],
                     config.flickr_secrets["api_secret"],
@@ -161,7 +161,7 @@ class FlickrController(PlatformController):
                 flickr.authenticate_via_browser(
                     perms = 'delete'
                     )
-                print(f"{self.name}: Work to do -- authenticated")
+                print_clear(f"{self.name}: Work to do -- authenticated")
             except Exception as ex:
                 logging.error(f"{self.name}: {ex}")
                 sys.exit()
