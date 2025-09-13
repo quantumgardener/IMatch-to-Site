@@ -398,7 +398,7 @@ class FlickrController(PlatformController):
                 flickr_pattern = flickr_pattern = re.compile(
                     rf'https://live\.staticflickr\.com/\d+/{photo_id}_[a-zA-Z0-9]+(?:_[a-z])?\.jpg'
                 )
-                for root, _, files in tqdm(os.walk(config.quantum_secrets['path']), desc="Updating website links"):
+                for root, _, files in os.walk(config.quantum_secrets['path']):
                     for file in files:
                         if file.endswith('.md'):
                             file_path = os.path.join(root, file)
