@@ -62,6 +62,7 @@ exiftool_public_tag_args = [
     "-GPSLongitudeRef",
     "-GPSAltitude",
     "-GPSAltitudeRef",
+    "-colorspacetags"
     "-overwrite_original"
 ]
 
@@ -85,6 +86,7 @@ exiftool_private_tag_args = [
     "-LensModel",
     "-LensMake",
     '-LensInfo',
+    "-colorspacetags"
     "-overwrite_original"
 ]
 
@@ -94,7 +96,7 @@ def set_metadata(exiftool_tasks, controller_name):
             try:
                 pbar.set_description(f"{controller_name}: Copying metadata")
                 args = exiftool_private_tag_args if isPrivate else exiftool_public_tag_args
-                cmd = ['-all=', '-overwrite_original', '-TagsFromFile', src] + args + [tgt]
+                cmd = ['-all=', '--icc_profile:all', '-overwrite_original', '-TagsFromFile', src] + args + [tgt]
                 response = et.send(cmd)
             except Exception as e:
                 logging.error(f"Failed to copy metadata to {tgt}: {e}")
